@@ -5,6 +5,7 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.mail.MailException;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -22,28 +23,18 @@ public class OutlookAlertService {
     @Value("${smartops.alert.recipient.email}")
     private String recipientEmail;
 
-    public void sendIncidentReport(String nodeName, String issue, String resolution) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+    public void sendIncidentReport(String nodeName, String issue, String resolution) throws MessagingException, MailException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        helper.setFrom(recipientEmail);
+        helper.setTo(recipientEmail);
+        helper.setSubject("[Smart Ops Engine] Incident Alert: " + nodeName);
+        helper.setText(buildHtmlContent(nodeName, issue, resolution, timeStr), true);
 
-            String htmlContent = buildHtmlContent(nodeName, issue, resolution, timeStr);
-
-            helper.setFrom(recipientEmail);
-            // Defaulting to send to the same email for notification purposes.
-            // In a real scenario, this would be read from properties or passed as an argument.
-            helper.setTo(recipientEmail); 
-            helper.setSubject("[Smart Ops Engine] Incident Alert: " + nodeName);
-            helper.setText(htmlContent, true);
-
-            mailSender.send(message);
-            log.info("Incident report email sent successfully for node: {}", nodeName);
-
-        } catch (MessagingException e) {
-            log.error("Failed to send incident report email for node: {}", nodeName, e);
-        }
+        mailSender.send(message);
+        log.info("Email sent successfully for node: {}", nodeName);
     }
 
     private String buildHtmlContent(String nodeName, String issue, String resolution, String timeStr) {
@@ -94,14 +85,13 @@ public class OutlookAlertService {
                 "</html>";
     }
 
-    public void sendDailySummaryReport(int activeNodesCount, long openIncidentsCount) {
-        try {
-            MimeMessage message = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+    public void sendDailySummaryReport(int activeNodesCount, long openIncidentsCount) throws MessagingException, MailException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
-            String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        String timeStr = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
-            String htmlContent = "<html>" +
+        String htmlContent = "<html>" +
                     "<head>" +
                     "<style>" +
                     "  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; }" +
@@ -151,11 +141,7 @@ public class OutlookAlertService {
             helper.setSubject("[Smart Ops Engine] Daily Health Report Summary");
             helper.setText(htmlContent, true);
 
-            mailSender.send(message);
-            log.info("Daily summary report email sent successfully.");
-
-        } catch (MessagingException e) {
-            log.error("Failed to send daily summary report email", e);
-        }
+        mailSender.send(message);
+        log.info("Daily summary report email sent successfully.");
     }
 }

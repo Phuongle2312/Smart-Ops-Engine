@@ -140,15 +140,23 @@ public class NodeController {
     @PostMapping("/test-email")
     public ResponseEntity<Map<String, String>> testEmail() {
         log.info("[API] Gửi email thử nghiệm...");
-        outlookAlertService.sendIncidentReport(
-                "TEST-NODE", 
-                "TEST_ALERT: Kiểm tra hệ thống email", 
-                "Đây là email kiểm tra tính năng gửi cảnh báo của Smart Ops Engine."
-        );
-        return ResponseEntity.ok(Map.of(
-                "status", "SENT",
-                "message", "Email kiểm tra đã được gửi. Hãy check hòm thư cấu hình."
-        ));
+        try {
+            outlookAlertService.sendIncidentReport(
+                    "TEST-NODE",
+                    "TEST_ALERT: Kiểm tra hệ thống email",
+                    "Đây là email kiểm tra tính năng gửi cảnh báo của Smart Ops Engine."
+            );
+            return ResponseEntity.ok(Map.of(
+                    "status", "SENT",
+                    "message", "Email đã được gửi thành công tới " + "letriphuong23.12@gmail.com"
+            ));
+        } catch (Exception e) {
+            log.error("[API] Gửi email thất bại: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
+                    "status", "FAILED",
+                    "message", e.getMessage()
+            ));
+        }
     }
 
     // --- DTOs (Records) ---
