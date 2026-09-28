@@ -1,15 +1,16 @@
 import React, { useContext } from 'react';
 import { NavLink } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
-import { 
-  LayoutDashboard, 
-  Server, 
-  AlertTriangle, 
-  BellRing, 
-  FileText, 
+import {
+  LayoutDashboard,
+  Server,
+  AlertTriangle,
+  BellRing,
+  FileText,
   ShieldAlert,
   User,
-  Shield
+  Shield,
+  Settings
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -22,6 +23,7 @@ const Sidebar = () => {
     { name: 'Sự cố', path: '/app/incidents', icon: AlertTriangle, role: 'ALL' },
     { name: 'Kênh thông báo', path: '/app/alert-channels', icon: BellRing, role: 'ADMIN' },
     { name: 'Nhật ký hệ thống', path: '/app/audit-logs', icon: FileText, role: 'ADMIN' },
+    { name: 'Cấu hình hệ thống', path: '/app/system-config', icon: Settings, role: 'ADMIN' },
   ];
 
   return (

@@ -2,11 +2,13 @@ package com.soe.scheduler;
 
 import com.soe.entity.IncidentLog;
 import com.soe.entity.Node;
+import com.soe.entity.SystemConfig;
 import com.soe.repository.IncidentLogRepository;
 import com.soe.repository.NodeRepository;
-import com.soe.service.LocalMetricsService;
+import com.soe.service.NodeMetricsService;
+import com.soe.service.NodeMetricsService.NodeMetricsSnapshot;
 import com.soe.service.OutlookAlertService;
-import com.soe.service.SshService;
+import com.soe.service.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -15,74 +17,34 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * HealthCheckScheduler — "Bộ não" giám sát định kỳ.
- *
- * <p>Đây là lớp trung tâm kết nối toàn bộ hệ thống lại với nhau:
- * <ol>
- *   <li>Lấy danh sách Node từ database</li>
- *   <li>SSH vào từng Node kiểm tra disk, CPU, memory</li>
- *   <li>Nếu vượt ngưỡng → gửi alert qua Outlook + ghi Incident Log</li>
- * </ol>
- *
- * <p><b>Cấu hình ngưỡng cảnh báo:</b> trong application.properties
- * <pre>
- * smartops.threshold.disk-warning=80
- * smartops.threshold.disk-critical=90
- * smartops.threshold.cpu-warning=85
- * </pre>
- *
- * @author Smart Ops Engine
- */
 @Slf4j
 @Component
 @RequiredArgsConstructor
-
 public class HealthCheckScheduler {
-
-    // Lệnh kiểm tra disk — lấy % sử dụng của phân vùng root
-    private static final String CMD_DISK_USAGE = "df -h / | awk 'NR==2 {print $5}' | tr -d '%'";
-
-    // Lệnh kiểm tra CPU load (1 phút) — dùng top snapshot mode
-    private static final String CMD_CPU_LOAD = "top -bn1 | grep 'Cpu(s)' | awk '{print $2}' | cut -d'%' -f1";
-
-    // Ngưỡng cảnh báo (%)
-    private static final int DISK_CRITICAL_THRESHOLD = 90;
-    private static final int DISK_WARNING_THRESHOLD = 80;
 
     private final NodeRepository nodeRepository;
     private final IncidentLogRepository incidentLogRepository;
-    private final SshService sshService;
     private final OutlookAlertService outlookAlertService;
-    private final LocalMetricsService localHealthCheckService;
+    private final NodeMetricsService nodeMetricsService;
+    private final SystemConfigService systemConfigService;
 
-    /**
-     * Health check toàn bộ Node mỗi 5 phút.
-     *
-     * <p>fixedDelay đảm bảo lần chạy sau chỉ bắt đầu sau khi lần trước HOÀN THÀNH —
-     * tránh race condition nếu số lượng Node lớn và SSH timeout.
-     * initialDelay=60s để chờ Spring Boot khởi động xong trước khi chạy lần đầu.
-     */
+    // LƯU Ý: @Scheduled đọc property này 1 LẦN lúc Spring khởi động (giới hạn của annotation-based
+    // scheduling). Trường "Chu kỳ quét" trên trang Cấu hình hệ thống được lưu vào DB để tham khảo/dùng
+    // cho v2.0, nhưng đổi giá trị này qua UI hiện tại CHƯA áp dụng ngay — vẫn cần restart backend.
     @Scheduled(fixedDelayString = "${smartops.scheduler.disk-check-interval-ms:300000}",
                initialDelay = 60_000)
     public void runDiskHealthCheck() {
-        log.info("[SCHEDULER] === Starting disk health check cycle ===");
-
-        // Chỉ lấy Node đang active (không check Node đã disabled)./mvnw spring-boot:run -DskipTests
+        log.info("[SCHEDULER] === Starting health check cycle ===");
         List<Node> activeNodes = nodeRepository.findByActiveTrue();
         log.info("[SCHEDULER] Found {} active node(s) to check", activeNodes.size());
 
         for (Node node : activeNodes) {
-            checkDiskUsage(node);
+            checkAllMetrics(node);
         }
 
-        log.info("[SCHEDULER] === Disk health check cycle completed ===");
+        log.info("[SCHEDULER] === Health check cycle completed ===");
     }
 
-    /**
-     * Kiểm tra disk mỗi giờ cho lần chạy báo cáo đầy đủ.
-     * Có thể dùng cho báo cáo định kỳ gửi Manager.
-     */
     @Scheduled(cron = "${smartops.scheduler.daily-report-cron:0 0 8 * * MON-FRI}")
     public void runDailyReport() {
         log.info("[SCHEDULER] Running daily morning health report...");
@@ -90,105 +52,65 @@ public class HealthCheckScheduler {
         long openIncidentsCount = incidentLogRepository.findAll().stream()
                 .filter(inc -> "OPEN".equalsIgnoreCase(inc.getStatus()))
                 .count();
-        outlookAlertService.sendDailySummaryReport(activeNodes.size(), openIncidentsCount);
+        try {
+            outlookAlertService.sendDailySummaryReport(activeNodes.size(), openIncidentsCount);
+        } catch (Exception e) {
+            log.error("[SCHEDULER] Failed to send daily summary report: {}", e.getMessage(), e);
+        }
     }
 
-    // -------------------------------------------------------------------------
-    // Private check methods — mỗi method chịu trách nhiệm 1 loại check
-    // -------------------------------------------------------------------------
-
-    /**
-     * Kiểm tra disk của một Node, xử lý và log kết quả.
-     */
-    private void checkDiskUsage(Node node) {
+    private void checkAllMetrics(Node node) {
         try {
-        int diskUsagePercent;
+            SystemConfig config = systemConfigService.getCurrentConfig();
+            int diskWarning = config.getDiskWarningThreshold();
+            int diskCritical = config.getDiskCriticalThreshold();
+            int cpuCritical = config.getCpuCriticalThreshold();
+            int memoryCritical = config.getMemoryCriticalThreshold();
 
-        // Cơ chế tự thích ứng (Adaptive)
-        if (node.getHost().equals("127.0.0.1") || node.getHost().equalsIgnoreCase("localhost")) {
-            log.info("[CHECK] Phát hiện Node Local. Đọc thông số trực tiếp từ Windows không qua SSH.");
-            diskUsagePercent = (int)localHealthCheckService.getPrimaryDiskUsagePercent();
-        } else {
-            // Nếu là server từ xa, giữ nguyên logic bắn lệnh SSH cũ
-            String rawOutput = sshService.executeCommand(node, CMD_DISK_USAGE);
-            diskUsagePercent = parseIntSafely(rawOutput, node.getName());
-        }
+            NodeMetricsSnapshot snap = nodeMetricsService.collectAndSave(node);
 
-        if (diskUsagePercent < 0) return;
+            // --- Disk ---
+            if (snap.diskPercent() >= diskCritical) {
+                String issue = String.format("Disk usage CRITICAL: %d%% (ngưỡng: %d%%)", snap.diskPercent(), diskCritical);
+                String resolution = "Cần xem xét ngay: dọn log cũ, xóa temp files, hoặc mở rộng dung lượng.";
+                outlookAlertService.sendMetricsAlert(node.getName(), snap, "DISK_CRITICAL", issue, resolution);
+                saveIncidentLog(node, "DISK_CRITICAL", issue, resolution, "OPEN");
 
-        log.info("[CHECK] Node '{}' disk usage: {}%", node.getName(), diskUsagePercent);
-        // Đoạn quyết định gửi mail: ktra ngưỡng và bắn alert email
-        if (diskUsagePercent >= DISK_CRITICAL_THRESHOLD) {
-            handleCriticalDisk(node, diskUsagePercent);
-        } else if (diskUsagePercent >= DISK_WARNING_THRESHOLD) {
-            handleWarningDisk(node, diskUsagePercent);
-        }
+            } else if (snap.diskPercent() >= diskWarning) {
+                String issue = String.format("Disk usage WARNING: %d%% (ngưỡng cảnh báo: %d%%)", snap.diskPercent(), diskWarning);
+                saveIncidentLog(node, "DISK_WARNING", issue,
+                        "Đang theo dõi. Sẽ cảnh báo nếu vượt " + diskCritical + "%.", "MONITORING");
+            }
+
+            // --- CPU ---
+            if (snap.cpuPercent() >= 0 && snap.cpuPercent() >= cpuCritical) {
+                String issue = String.format("CPU usage CRITICAL: %d%% (ngưỡng: %d%%)", snap.cpuPercent(), cpuCritical);
+                String resolution = "Kiểm tra tiến trình đang chiếm CPU cao, cân nhắc restart service hoặc scale up.";
+                outlookAlertService.sendMetricsAlert(node.getName(), snap, "CPU_CRITICAL", issue, resolution);
+                saveIncidentLog(node, "CPU_CRITICAL", issue, resolution, "OPEN");
+            }
+
+            // --- Memory ---
+            if (snap.memoryPercent() >= 0 && snap.memoryPercent() >= memoryCritical) {
+                String issue = String.format("Memory usage CRITICAL: %d%% (ngưỡng: %d%%)", snap.memoryPercent(), memoryCritical);
+                String resolution = "Kiểm tra memory leak, restart service hoặc tăng RAM.";
+                outlookAlertService.sendMetricsAlert(node.getName(), snap, "MEMORY_CRITICAL", issue, resolution);
+                saveIncidentLog(node, "MEMORY_CRITICAL", issue, resolution, "OPEN");
+            }
 
         } catch (Exception e) {
-        log.error("[SCHEDULER] Lỗi khi kiểm tra Node '{}': {}", node.getName(), e.getMessage());
+            log.error("[SCHEDULER] Lỗi khi kiểm tra Node '{}': {}", node.getName(), e.getMessage());
+
+            String issue = "Không thể thu thập metrics — Server có thể đã down hoặc unreachable";
+            String resolution = "Kiểm tra network, firewall, và trạng thái server vật lý.";
+            outlookAlertService.sendMetricsAlert(node.getName(), null, "SSH_FAILURE", issue, resolution);
+            saveIncidentLog(node, "SSH_FAILURE", issue, resolution, "OPEN");
         }
     }
-       
-    
 
-    /**
-     * Xử lý khi disk vượt ngưỡng CRITICAL (>= 90%).
-     * Gửi alert + ghi incident log với độ ưu tiên cao.
-     */
-    private void handleCriticalDisk(Node node, int usagePercent) {
-        String issue = String.format("Disk usage CRITICAL: %d%% (ngưỡng: %d%%)",
-                usagePercent, DISK_CRITICAL_THRESHOLD);
-        String resolution = "Hệ thống đã ghi nhận. Cần xem xét ngay: dọn log cũ, "
-                + "xóa temp files, hoặc mở rộng dung lượng.";
-
-        log.warn("[ALERT] {} on node '{}'", issue, node.getName());
-
-        // Gửi alert email
-        outlookAlertService.sendIncidentReport(node.getName(), issue, resolution);
-
-        // Ghi vào database
-        saveIncidentLog(node, "DISK_CRITICAL", issue, resolution, "OPEN");
-    }
-
-    /**
-     * Xử lý khi disk ở mức WARNING (80–89%).
-     * Chỉ ghi log, không gửi email để tránh spam.
-     * Có thể bật email warning trong application.properties nếu cần.
-     */
-    private void handleWarningDisk(Node node, int usagePercent) {
-        String issue = String.format("Disk usage WARNING: %d%% (ngưỡng cảnh báo: %d%%)",
-                usagePercent, DISK_WARNING_THRESHOLD);
-        String resolution = "Đang theo dõi. Sẽ cảnh báo nếu vượt " + DISK_CRITICAL_THRESHOLD + "%.";
-
-        log.warn("[WARNING] {} on node '{}'", issue, node.getName());
-        saveIncidentLog(node, "DISK_WARNING", issue, resolution, "MONITORING");
-    }
-
-    /**
-     * Xử lý khi không SSH được vào Node — server có thể đã down.
-     */
-    private void handleSshFailure(Node node, SshService.SshExecutionException e) {
-        String issue = "Không thể kết nối SSH — Server có thể đã down hoặc unreachable";
-        String resolution = "Kiểm tra network, firewall, và trạng thái server vật lý.";
-
-        log.error("[ALERT] SSH failed for node '{}': {}", node.getName(), e.getMessage());
-
-        outlookAlertService.sendIncidentReport(node.getName(), issue, resolution);
-        saveIncidentLog(node, "SSH_FAILURE", issue, resolution, "OPEN");
-    }
-
-    // -------------------------------------------------------------------------
-    // Utilities
-    // -------------------------------------------------------------------------
-
-    /**
-     * Lưu sự kiện vào bảng incident_logs.
-     * Bắt exception để lỗi DB không làm sập scheduler.
-     */
-    private void saveIncidentLog(Node node, String type, String issue,
-                                  String resolution, String status) {
+    private void saveIncidentLog(Node node, String type, String issue, String resolution, String status) {
         try {
-            IncidentLog log = IncidentLog.builder()
+            IncidentLog record = IncidentLog.builder()
                     .node(node)
                     .incidentType(type)
                     .issueDescription(issue)
@@ -196,26 +118,9 @@ public class HealthCheckScheduler {
                     .status(status)
                     .detectedAt(LocalDateTime.now())
                     .build();
-            incidentLogRepository.save(log);
+            incidentLogRepository.save(record);
         } catch (Exception e) {
-            log.error("[SCHEDULER] Failed to save incident log for node '{}': {}",
-                    node.getName(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Parse String thành int an toàn, không throw exception.
-     * @return giá trị int, hoặc -1 nếu parse thất bại
-     */
-    private int parseIntSafely(String value, String nodeName) {
-        try {
-            return Integer.parseInt(value.replace("%", "").trim());
-        } catch (NumberFormatException e) {
-            log.warn("[CHECK] Cannot parse disk usage value '{}' from node '{}'. Skipping.",
-                    value, nodeName);
-            return -1;
+            log.error("[SCHEDULER] Failed to save incident log for node '{}': {}", node.getName(), e.getMessage(), e);
         }
     }
 }
-
-

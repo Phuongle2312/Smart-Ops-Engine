@@ -1,0 +1,17 @@
+# 09 — Test Cases: Cấu hình hệ thống (System Config)
+
+Phân hệ Cấu hình hệ thống đảm bảo nạp các tham số vận hành từ file properties, ghi đè các cấu hình nhạy cảm bằng Biến môi trường hệ thống, thiết lập môi trường Production an toàn (HTTPS, xác thực DB) và quản lý các thư viện phụ thuộc (Maven pom.xml).
+
+---
+
+## 1. Backend Test Cases (Properties, Environment Variables & Profiles)
+
+| ID | Test Scenario | Prerequisites | Steps | Test Data | Expected Result | Type | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **TC-CONFIG-BE-01** | Ghi đè cấu hình DB bằng Biến môi trường | Thiết lập biến môi trường DB_PASSWORD trên hệ điều hành | Khởi động Spring Boot và kết nối cơ sở dữ liệu | `DB_PASSWORD = "secret_db_pass"` | - Spring Boot nạp cấu hình và kết nối cơ sở dữ liệu SQL Server thành công sử dụng password từ biến môi trường.<br>- Không có mật khẩu plaintext nào lưu trữ trong file properties cấu hình. | Security / Functional | `Pass` |
+| **TC-CONFIG-BE-02** | Khởi động môi trường Production với Profile `prod` | Cài đặt biến môi trường `SPRING_PROFILES_ACTIVE = prod` | Khởi động Spring Boot qua CLI | CLI:<br>`java -jar -Dspring.profiles.active=prod smart-ops.jar` | - Spring Boot khởi động sử dụng file cấu hình `application-prod.properties` (hoặc profile `prod` trong YAML).<br>- Tắt toàn bộ log truy vấn JPA (`spring.jpa.show-sql = false`).<br>- Chế độ tự động sửa schema database chuyển sang kiểm tra cấu trúc (`spring.jpa.hibernate.ddl-auto = validate`). | Functional | `Pass` |
+| **TC-CONFIG-BE-03** | Khởi động HTTPS ở môi trường Production | Cấu hình SSL keystore PKCS12 trong classpath và khai báo password | Khởi động server ở profile prod | N/A | - Server khởi chạy thành công trên cổng SSL (mặc định 8443 hoặc 8080 tùy cấu hình HTTPS).<br>- Mọi kết nối HTTP thường bị từ chối hoặc chuyển hướng tự động sang HTTPS. | Security | `Pass` |
+| **TC-CONFIG-BE-04** | Kiểm tra nạp khóa bảo mật JWT_SECRET từ môi trường | Cấu hình JwtService đọc `smartops.jwt.secret` | Khởi động và thực hiện đăng nhập | `JWT_SECRET = "ngau_nhien_64_ky_tu_..."` | - Hệ thống khởi động thành công.<br>- JWT Token được ký số bằng thuật toán HMAC-SHA256 sử dụng khóa ngẫu nhiên nạp từ môi trường hợp lệ. | Security | `N/A` |
+| **TC-CONFIG-BE-05** | Xác thực kiểm tra kết nối SQL Server bảo mật | Database SQL Server yêu cầu mã hóa kết nối | Kiểm tra chuỗi connection url trong properties | URL:<br>`jdbc:sqlserver://...;encrypt=true;trustServerCertificate=true` | - Kết nối DB được mã hóa đường truyền SSL thành công (`encrypt=true`).<br>- Tránh được việc nghe lén gói tin (Sniffing) dữ liệu giữa App Server và DB Server. | Security | `Pass` |
+| **TC-CONFIG-BE-06** | Xác nhận nạp đầy đủ các biến môi trường nhạy cảm | Hệ thống chuẩn bị deploy production | Đối chiếu cấu hình thực tế với checklist biến môi trường bắt buộc | Checklist:<br>DB_PASSWORD, MAIL_PASSWORD, AES_SECRET_KEY, JWT_SECRET | - Đạt: Toàn bộ 4 biến môi trường nhạy cảm đều được nạp đầy đủ.<br>- Không có bất kỳ key nhạy cảm nào bị rò rỉ trên repository Git. | Security / Verification | `Pass` |
+| **TC-CONFIG-BE-07** | Xác thực sự phụ thuộc thư viện Maven (pom.xml) | Hệ thống thực hiện build gói tin | Chạy lệnh package Maven | CLI:<br>`mvn clean package` | - Maven tải đầy đủ các starter: web, validation, data-jpa, mail, mssql-jdbc, jsch, oshi-core.<br>- Build thành công file JAR chạy độc lập mà không gặp lỗi xung đột thư viện (dependency conflicts). | Build / Reliability | `Pass` |

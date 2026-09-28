@@ -1,6 +1,6 @@
 # 03 — Health Check Scheduler — Backend
 
-> **Trạng thái:** `[BE v1.0 ✅]` Disk check hoạt động. CPU/RAM check `[BE v2.0 🔜]` kế hoạch.
+> **Trạng thái:** `[BE v1.5 ✅]` Disk/CPU/RAM check hoạt động, lưu lịch sử. ShedLock & Pool `[BE v2.0 🔜]`.
 
 ---
 
@@ -8,15 +8,16 @@
 
 `HealthCheckScheduler` là lớp trung tâm điều phối toàn bộ quá trình giám sát:
 1. Lấy danh sách Node `active = true` từ DB.
-2. Với mỗi Node: đọc Disk usage (SSH hoặc Local JVM API).
-3. So sánh với ngưỡng → tạo Incident + gửi alert nếu cần.
+2. Với mỗi Node: đọc **Disk + CPU + RAM** (SSH hoặc Local JVM API) qua `NodeMetricsService`.
+3. Lưu snapshot vào bảng `node_metrics`.
+4. So sánh 3 thông số với ngưỡng → tạo Incident + gửi alert nếu cần.
 
 **Class:** `com.soe.scheduler.HealthCheckScheduler`  
-**Dependencies:** `NodeRepository`, `IncidentLogRepository`, `SshService`, `OutlookAlertService`, `LocalMetricsService`
+**Dependencies:** `NodeRepository`, `IncidentLogRepository`, `NodeMetricsService`, `OutlookAlertService`
 
 ---
 
-## Job 1: Kiểm tra Disk định kỳ
+## Job 1: Kiểm tra Disk/CPU/RAM định kỳ
 
 ```java
 @Scheduled(
@@ -26,8 +27,8 @@
 public void runDiskHealthCheck()
 ```
 
-- **`fixedDelay`** (không phải `fixedRate`): Lần chạy tiếp theo chỉ bắt đầu sau khi lần trước **hoàn thành**. Tránh race condition nếu số Node lớn và SSH timeout.
-- **`initialDelay = 60s`**: Chờ Spring Boot khởi động đầy đủ (DB connection, bean wiring) trước lần chạy đầu.
+- **`fixedDelay`**: Lần chạy tiếp theo chỉ bắt đầu sau khi lần trước **hoàn thành**.
+- **`initialDelay = 60s`**: Chờ Spring Boot khởi động đầy đủ.
 - Mặc định 5 phút, cấu hình qua `application.properties`.
 
 **Luồng thực thi:**
@@ -35,9 +36,10 @@ public void runDiskHealthCheck()
 activeNodes = nodeRepository.findByActiveTrue()
 for each node in activeNodes:
     try:
-        checkDiskUsage(node)
+        checkAllMetrics(node)    // Thu thập disk + cpu + memory
     catch Exception:
-        log.error(...)   ← Không re-throw, tiếp tục Node khác
+        log.error(...)           // Lỗi SSH/network → gửi alert SSH_FAILURE
+        continue to next node
 ```
 
 ---
@@ -57,32 +59,56 @@ public void runDailyReport()
 
 ---
 
-## Logic kiểm tra từng Node — `checkDiskUsage(Node node)`
+## Logic kiểm tra từng Node — `checkAllMetrics(Node node)`
+
+**Bước 1: Thu thập 3 metrics qua `NodeMetricsService.collectAndSave(node)`**
 
 ```
-Node.host = "127.0.0.1" hoặc "localhost"?
-    ├── Đúng → localHealthCheckService.getPrimaryDiskUsagePercent()
-    │           Đọc trực tiếp JVM API (Windows: C:\, Linux: /)
-    │           Không cần SSH, không cần credentials
-    └── Sai  → sshService.executeCommand(node, CMD_DISK_USAGE)
-                Kết nối SSH, chạy lệnh shell
-
-CMD_DISK_USAGE = "df -h / | awk 'NR==2 {print $5}' | tr -d '%'"
-Output: "85" (string nguyên, không có ký tự %)
-
-parseIntSafely(rawOutput):
-    → Integer.parseInt(value.replace("%","").trim())
-    → Trả -1 nếu fail → log WARN → skip Node
-
-diskUsage >= 90% → handleCriticalDisk(node, usage)
-diskUsage >= 80% → handleWarningDisk(node, usage)
-diskUsage < 80%  → log INFO, không action
+NodeMetricsService.collectAndSave(node):
+  Node.host = "127.0.0.1" hoặc "localhost"?
+    ├── Đúng → Đọc CPU/RAM/Disk từ JVM API (LocalMetricsService)
+    └── Sai  → Kết nối SSH, chạy 3 lệnh Linux:
+                • Disk: "df -h / | awk 'NR==2 {print $5}' | tr -d '%'"
+                • CPU:  "grep 'cpu ' /proc/stat | awk '{u=$2+$4; t=...; print int(u/t*100)}'"
+                • Mem:  "free | awk '/Mem:/ {printf \"%.0f\", $3/$2*100}'"
+  
+  Lưu NodeMetric record vào DB (node_id, disk%, cpu%, mem%, recordedAt)
+  Trả về NodeMetricsSnapshot { diskPercent, cpuPercent, memoryPercent }
 ```
 
-**Ngưỡng (hardcoded — [TODO ⚠️] cần đọc từ `@Value`):**
+**Bước 2: So sánh ngưỡng & xử lý**
+
 ```java
-private static final int DISK_CRITICAL_THRESHOLD = 90;
-private static final int DISK_WARNING_THRESHOLD  = 80;
+snap = nodeMetricsService.collectAndSave(node);
+
+// Disk
+if (snap.diskPercent() >= diskCritical)        // Mặc định 90%
+    → handleCriticalDisk()  → gửi email + incident OPEN
+else if (snap.diskPercent() >= diskWarning)    // Mặc định 80%
+    → log incident MONITORING (không gửi email)
+
+// CPU
+if (snap.cpuPercent() >= cpuCritical)          // Mặc định 85%
+    → handleCriticalCpu()   → gửi email + incident OPEN
+
+// Memory
+if (snap.memoryPercent() >= memoryCritical)    // Mặc định 90%
+    → handleCriticalMemory() → gửi email + incident OPEN
+```
+
+**Ngưỡng (đọc từ `@Value`, cấu hình trong `application.properties`):**
+```java
+@Value("${smartops.threshold.disk-warning:80}")
+private int diskWarning;
+
+@Value("${smartops.threshold.disk-critical:90}")
+private int diskCritical;
+
+@Value("${smartops.threshold.cpu-critical:85}")
+private int cpuCritical;
+
+@Value("${smartops.threshold.memory-critical:90}")
+private int memoryCritical;
 ```
 
 ---
@@ -92,40 +118,68 @@ private static final int DISK_WARNING_THRESHOLD  = 80;
 ### DISK_CRITICAL (>= 90%)
 
 ```java
-private void handleCriticalDisk(Node node, int usagePercent) {
-    String issue = "Disk usage CRITICAL: " + usagePercent + "% (ngưỡng: 90%)";
+if (snap.diskPercent() >= diskCritical) {
+    String issue = String.format("Disk usage CRITICAL: %d%% (ngưỡng: %d%%)", 
+        snap.diskPercent(), diskCritical);
     String resolution = "Cần xem xét ngay: dọn log cũ, xóa temp files, mở rộng dung lượng.";
-
-    outlookAlertService.sendIncidentReport(node.getName(), issue, resolution);  // Gửi email
-    saveIncidentLog(node, "DISK_CRITICAL", issue, resolution, "OPEN");         // Ghi DB
+    
+    outlookAlertService.sendMetricsAlert(node.getName(), snap, "DISK_CRITICAL", issue, resolution);
+    saveIncidentLog(node, "DISK_CRITICAL", issue, resolution, "OPEN");
 }
 ```
 
 ### DISK_WARNING (80–89%)
 
 ```java
-private void handleWarningDisk(Node node, int usagePercent) {
-    String issue = "Disk usage WARNING: " + usagePercent + "% (ngưỡng: 80%)";
-    String resolution = "Đang theo dõi. Sẽ cảnh báo nếu vượt 90%.";
-
+if (snap.diskPercent() >= diskWarning) {
+    String issue = String.format("Disk usage WARNING: %d%% (ngưỡng cảnh báo: %d%%)", 
+        snap.diskPercent(), diskWarning);
+    
     // Chỉ ghi log — KHÔNG gửi email (tránh spam)
-    saveIncidentLog(node, "DISK_WARNING", issue, resolution, "MONITORING");
+    saveIncidentLog(node, "DISK_WARNING", issue, "Đang theo dõi...", "MONITORING");
+}
+```
+
+### CPU_CRITICAL (>= 85%)
+
+```java
+if (snap.cpuPercent() >= cpuCritical) {
+    String issue = String.format("CPU usage CRITICAL: %d%% (ngưỡng: %d%%)", 
+        snap.cpuPercent(), cpuCritical);
+    String resolution = "Kiểm tra tiến trình đang chiếm CPU cao, restart service hoặc scale up.";
+    
+    outlookAlertService.sendMetricsAlert(node.getName(), snap, "CPU_CRITICAL", issue, resolution);
+    saveIncidentLog(node, "CPU_CRITICAL", issue, resolution, "OPEN");
+}
+```
+
+### MEMORY_CRITICAL (>= 90%)
+
+```java
+if (snap.memoryPercent() >= memoryCritical) {
+    String issue = String.format("Memory usage CRITICAL: %d%% (ngưỡng: %d%%)", 
+        snap.memoryPercent(), memoryCritical);
+    String resolution = "Kiểm tra memory leak, restart service hoặc tăng RAM.";
+    
+    outlookAlertService.sendMetricsAlert(node.getName(), snap, "MEMORY_CRITICAL", issue, resolution);
+    saveIncidentLog(node, "MEMORY_CRITICAL", issue, resolution, "OPEN");
 }
 ```
 
 ### SSH_FAILURE
 
 ```java
-private void handleSshFailure(Node node, SshService.SshExecutionException e) {
-    String issue = "Không thể kết nối SSH — Server có thể đã down hoặc unreachable";
+try {
+    snap = nodeMetricsService.collectAndSave(node);
+    // Check thresholds...
+} catch (Exception e) {
+    String issue = "Không thể thu thập metrics — Server có thể đã down hoặc unreachable";
     String resolution = "Kiểm tra network, firewall, và trạng thái server vật lý.";
-
-    outlookAlertService.sendIncidentReport(node.getName(), issue, resolution);
+    
+    outlookAlertService.sendMetricsAlert(node.getName(), null, "SSH_FAILURE", issue, resolution);
     saveIncidentLog(node, "SSH_FAILURE", issue, resolution, "OPEN");
 }
 ```
-
-**[TODO ⚠️]:** Method `handleSshFailure()` đã có trong code nhưng chưa được gọi. `checkDiskUsage()` catch `Exception` chung, không có `catch (SshService.SshExecutionException e)` riêng để gọi `handleSshFailure()`. Cần sửa lại.
 
 ---
 
@@ -210,24 +264,34 @@ private void saveIncidentLog(Node node, String type, String issue, String resolu
 | Resource | Command Shell                                                             | Output mẫu |
 | :------- | :------------------------------------------------------------------------ | :--------- |
 | **Disk** | `df -h / \| awk 'NR==2 {print $5}' \| tr -d '%'`                        | `"85"`     |
-| **CPU**  | `top -bn1 \| grep 'Cpu(s)' \| awk '{print $2}' \| cut -d'%' -f1`        | `"42.5"` *(định nghĩa nhưng chưa dùng)* |
-| **RAM**  | `free \| awk 'NR==2{printf "%.0f", $3/$2*100}'`                           | `"75"` *(định nghĩa nhưng chưa dùng)* |
+| **CPU**  | `grep 'cpu ' /proc/stat \| awk '{u=$2+$4; t=$2+$3+$4+$5+$6+$7+$8; print int(u/t*100)}'` | `"42"` |
+| **RAM**  | `free \| awk '/Mem:/ {printf "%.0f", $3/$2*100}'`                       | `"75"`     |
+
+**Lưu ý:** Các lệnh trên chạy được trên Linux/Unix. Nếu node là local (127.0.0.1), dùng `LocalMetricsService` với JVM API thay vì SSH.
+
+---
+
+## Triển khai v1.5 `[✅ HOÀN TẤT]`
+
+| Tính năng                | Trạng thái    | Ghi chú                                                           |
+| :----------------------- | :------------ | :---------------------------------------------------------------- |
+| Kiểm tra CPU + RAM       | ✅ v1.5       | Thêm `NodeMetricsService` → gọi 3 lệnh Linux qua SSH             |
+| Ngưỡng đọc từ `@Value`   | ✅ v1.5       | Thêm `@Value` cho `cpu-critical`, `memory-critical`, etc.        |
+| Lưu Node_Metrics         | ✅ v1.5       | Entity `NodeMetric` → tự động insert sau mỗi `collectAndSave()`  |
+| Email có bảng 3 metrics  | ✅ v1.5       | Thêm `sendMetricsAlert()` → hiển thị disk/cpu/mem đầy đủ         |
 
 ---
 
 ## Kế hoạch v2.0 `[BE v2.0 🔜]`
 
-| Tính năng                | Mô tả                                                                 |
-| :----------------------- | :-------------------------------------------------------------------- |
-| Kiểm tra CPU + RAM       | Gọi `CMD_CPU_LOAD` và `CMD_RAM_USAGE` trong `checkDiskUsage()`       |
-| Ngưỡng đọc từ `@Value`   | Bỏ hardcode, thêm `@Value("${smartops.threshold.disk-critical:90}")` |
-| Fix SSH_FAILURE handler  | Thêm `catch (SshExecutionException e) { handleSshFailure(...) }`     |
-| Dedup incidents          | Check `node_id + type + status=OPEN` trước khi `saveIncidentLog()`   |
-| ShedLock                 | `@SchedulerLock(name="healthCheckJob", lockAtMostFor="4m")`           |
-| SSH Connection Pool      | Session reuse thay vì tạo mới mỗi lần                                |
-| Parallel scan            | `ThreadPoolTaskExecutor` để scan nhiều Node đồng thời                |
-| Lưu Node_Metrics         | Sau mỗi chu kỳ thành công, insert snapshot vào `Node_Metrics`        |
-| Xóa metrics cũ           | Job cleanup `Node_Metrics` cũ hơn 90 ngày                            |
+| Tính năng                | Mô tả                                                              |
+| :----------------------- | :----------------------------------------------------------------- |
+| Dedup incidents          | Check `node_id + type + status=OPEN` trước khi `saveIncidentLog()` |
+| ShedLock                 | `@SchedulerLock(name="healthCheckJob", lockAtMostFor="4m")`        |
+| SSH Connection Pool      | Session reuse thay vì tạo mới mỗi lần                             |
+| Parallel scan            | `ThreadPoolTaskExecutor` để scan nhiều Node đồng thời             |
+| Cleanup cũ metrics       | Job xóa `Node_Metrics` cũ hơn 90 ngày                             |
+| WebSocket realtime       | Push metrics mới tới FE thay vì polling                           |
 
 ---
 

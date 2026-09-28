@@ -1,6 +1,6 @@
 # 05 — Cảnh báo đa kênh — Backend
 
-> **Trạng thái:** `[BE v1.0 ✅]` Email SMTP hoạt động. Webhook + Alert Channels `[BE v2.0 🔜]`.
+> **Trạng thái:** `[BE v1.5 ✅]` Email SMTP + metrics alert hoạt động. Webhook + Alert Channels `[BE v2.0 🔜]`.
 
 ---
 
@@ -22,35 +22,62 @@ spring.mail.properties.mail.smtp.starttls.required=true
 
 > **[TODO ⚠️]:** `spring.mail.password` đang lưu plaintext trong `application.properties`. Phải đưa ra biến môi trường `MAIL_PASSWORD`.
 
-### Method: `sendIncidentReport()`
+### Method: `sendIncidentReport()` (Legacy — v1.0)
 
-Được gọi bởi Scheduler khi: `DISK_CRITICAL` hoặc `SSH_FAILURE`.
+Được gọi bởi Scheduler v1.0 khi: `DISK_CRITICAL` hoặc `SSH_FAILURE`.
 
 ```
 Tham số: nodeName, issue, resolution
 Subject: [Smart Ops Engine] Incident Alert: {nodeName}
-From: smartops.alert.recipient.email  ← [TODO: nên là no-reply@domain.com]
-To:   smartops.alert.recipient.email  ← [TODO: nên là ops-team@domain.com]
 ```
 
-**HTML Template (màu đỏ `#d32f2f`):**
+**HTML Template (màu đỏ `#d32f2f`), đơn giản không có metrics.**
 
-```
-┌─────────────────────────────┐
-│  🚨 Incident Alert Report   │  ← Header đỏ
-├─────────────────────────────┤
-│ Server Name:  {nodeName}    │
-│ Error Type:   {issue}       │  ← text đỏ đậm
-│ Action Taken: {resolution}  │
-│ Time:         {timestamp}   │
-├─────────────────────────────┤
-│ This is an automated msg... │  ← Footer
-└─────────────────────────────┘
+---
+
+### Method: `sendMetricsAlert()` (v1.5 ✅)
+
+Được gọi bởi Scheduler v1.5 khi vượt ngưỡng: `DISK_CRITICAL`, `CPU_CRITICAL`, `MEMORY_CRITICAL`, hoặc `SSH_FAILURE`.
+
+```java
+public void sendMetricsAlert(String nodeName, NodeMetricsSnapshot metrics,
+                              String alertType, String issue, String resolution)
 ```
 
-> **[TODO ⚠️]:** `From` và `To` hiện là cùng một địa chỉ email. Cần tách thành `mail.from` (bot address) và `mail.to` (recipient list).
+**Tham số:**
+- `nodeName`: Tên Node
+- `metrics`: Object chứa `{ diskPercent, cpuPercent, memoryPercent }` hoặc `null` nếu SSH lỗi
+- `alertType`: `"DISK_CRITICAL"`, `"CPU_CRITICAL"`, `"MEMORY_CRITICAL"`, `"SSH_FAILURE"`
+- `issue`: Mô tả vấn đề (VD: "Disk usage CRITICAL: 95% (ngưỡng: 90%)")
+- `resolution`: Khuyến nghị xử lý
 
-### Method: `sendDailySummaryReport()`
+**HTML Template:**
+```
+┌─────────────────────────────────────────┐
+│  🚨 DISK_CRITICAL — prod-web-01        │  ← Header, màu theo alert type
+├─────────────────────────────────────────┤
+│ Server:          prod-web-01            │
+│ Alert Type:      DISK_CRITICAL          │  ← text đỏ nếu CRITICAL
+│ Mô tả:           Disk usage CRITICAL... │
+│ Khuyến nghị:     Dọn log cũ...          │
+│ Thời gian:       2026-06-30 14:30:00    │
+│                                         │
+│ Thông số hệ thống hiện tại:             │
+│ ├─ CPU:    42%      ← xanh (< 80%)      │
+│ ├─ Memory: 72%      ← xanh (< 80%)      │
+│ └─ Disk:   95%      ← đỏ   (>= 90%)     │
+├─────────────────────────────────────────┤
+│ Smart Ops Engine — automated alert     │
+└─────────────────────────────────────────┘
+```
+
+**Quy tắc màu sắc:**
+- Disk/CPU/Memory < 80%: 🟢 xanh `#2e7d32`
+- Disk/CPU/Memory 80–89%: 🟠 cam `#f57c00`
+- Disk/CPU/Memory >= 90%: 🔴 đỏ `#d32f2f`
+- Header: Màu theo `alertType` (CRITICAL → đỏ, SSH_FAILURE → đỏ)
+
+### Method: `sendDailySummaryReport()` (v1.0)
 
 Được gọi bởi Scheduler mỗi 08:00 sáng thứ Hai – thứ Sáu.
 
@@ -74,14 +101,51 @@ Subject: [Smart Ops Engine] Daily Health Report Summary
 
 ---
 
-## Endpoint Test Email (v1.0)
+### Helper method: `buildMetricRows()` & `gauge()` (v1.5)
+
+Được dùng bởi `sendMetricsAlert()` để sinh hàng bảng HTML cho metrics:
+
+```java
+private String buildMetricRows(NodeMetricsSnapshot m) {
+    return gauge("CPU", m.cpuPercent())
+            + gauge("Memory", m.memoryPercent())
+            + gauge("Disk (/)", m.diskPercent());
+}
+
+private String gauge(String label, int percent) {
+    if (percent < 0) return "<tr><td>" + label + "</td><td>N/A</td></tr>";
+    String color = percent >= 90 ? "#d32f2f" : percent >= 80 ? "#f57c00" : "#2e7d32";
+    return "<tr><td>" + label + "</td><td style='color:" + color + ";font-weight:bold'>"
+            + percent + "%</td></tr>";
+}
+```
+
+---
+
+## API Endpoints
+
+### POST `/api/test-email` (v1.0)
+
+Gửi email test để kiểm tra cấu hình SMTP.
 
 ```
-POST /api/test-email
-
-→ Gửi email test với nodeName="TEST-NODE"
-Response 200: { "status": "SENT", "message": "..." }
+Response 200:
+{
+  "status": "SENT",
+  "message": "Email đã được gửi thành công tới letriphuong23.12@gmail.com"
+}
 ```
+
+---
+
+## Tóm tắt v1.5 `[✅ HOÀN TẤT]`
+
+| Tính năng                    | Mô tả                                              |
+| :--------------------------- | :------------------------------------------------- |
+| `sendMetricsAlert()` method  | Email với bảng 3 metrics + màu theo mức độ        |
+| HTML template cải thiện      | Hiển thị Disk/CPU/Memory trong email               |
+| Helper methods               | `buildMetricRows()`, `gauge()` cho màu sắc động   |
+| Integration với Scheduler    | Gọi từ `checkAllMetrics()` khi vượt ngưỡng        |
 
 ---
 

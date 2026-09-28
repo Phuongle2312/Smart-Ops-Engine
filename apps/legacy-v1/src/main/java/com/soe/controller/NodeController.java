@@ -2,9 +2,14 @@ package com.soe.controller;
 
 import com.soe.entity.IncidentLog;
 import com.soe.entity.Node;
+import com.soe.entity.NodeMetric;
 import com.soe.repository.IncidentLogRepository;
+import com.soe.repository.NodeMetricRepository;
 import com.soe.repository.NodeRepository;
 import com.soe.scheduler.HealthCheckScheduler;
+import com.soe.service.NodeMetricsService;
+import com.soe.service.NodeMetricsService.NodeMetricsSnapshot;
+import com.soe.service.OutlookAlertService;
 import com.soe.util.AesEncryptionUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import com.soe.service.OutlookAlertService;
 
 /**
  * NodeController — REST API chuyên nghiệp cho Smart Ops Engine.
@@ -29,6 +33,8 @@ public class NodeController {
 
     private final NodeRepository nodeRepository;
     private final IncidentLogRepository incidentLogRepository;
+    private final NodeMetricRepository nodeMetricRepository;
+    private final NodeMetricsService nodeMetricsService;
     private final HealthCheckScheduler healthCheckScheduler;
     private final OutlookAlertService outlookAlertService;
 
@@ -101,15 +107,40 @@ public class NodeController {
 
     @PostMapping("/check-now")
     public ResponseEntity<Map<String, String>> triggerCheckNow() {
-        log.info("[API] Kích hoạt kiểm tra thủ công qua @Async");
-        
-        // Gọi trực tiếp, Spring sẽ tự chạy ngầm nhờ @Async đã đặt ở Scheduler
+        log.info("[API] Kích hoạt kiểm tra thủ công");
         healthCheckScheduler.runDiskHealthCheck();
-
         return ResponseEntity.accepted().body(Map.of(
                 "status", "TRIGGERED",
                 "message", "Tiến trình kiểm tra đã bắt đầu. Kiểm tra Email hoặc Log để xem kết quả."
         ));
+    }
+
+    @PostMapping("/nodes/{id}/check-now")
+    public ResponseEntity<?> checkNodeNow(@PathVariable Long id) {
+        return nodeRepository.findById(id)
+                .map(node -> {
+                    try {
+                        NodeMetricsSnapshot snap = nodeMetricsService.collectAndSave(node);
+                        return ResponseEntity.ok(Map.of(
+                                "nodeId", id,
+                                "nodeName", node.getName(),
+                                "diskPercent", snap.diskPercent(),
+                                "cpuPercent", snap.cpuPercent(),
+                                "memoryPercent", snap.memoryPercent()
+                        ));
+                    } catch (Exception e) {
+                        log.error("[API] check-now failed for node {}: {}", id, e.getMessage());
+                        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                                .body(Map.of("error", e.getMessage()));
+                    }
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/nodes/{id}/metrics")
+    public ResponseEntity<List<NodeMetric>> getNodeMetrics(@PathVariable Long id) {
+        if (!nodeRepository.existsById(id)) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(nodeMetricRepository.findTop50ByNodeIdOrderByRecordedAtDesc(id));
     }
 
     @GetMapping("/incidents")

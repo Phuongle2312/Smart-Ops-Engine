@@ -68,5 +68,4 @@ SRS/
 
 ## Tài liệu đầy đủ (monolithic)
 
-- [backend_srs_v2.md](backend_srs_v2.md) — SRS Backend tổng hợp (v2.1)
-- [frontend_srs_v2.md](frontend_srs_v2.md) — SRS Frontend tổng hợp (v2.1)
+> Hai tài liệu tổng hợp `backend_srs_v2.md` / `frontend_srs_v2.md` đã được tách thành 9 module ở trên và không còn trong repo.

@@ -8,6 +8,7 @@ import com.soe.entity.Node;
 import com.soe.util.AesEncryptionUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import com.jcraft.jsch.Channel;
 
@@ -21,11 +22,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class SshService {
-// Timeout kết nối TCP (ms) — đủ cho môi trường LAN nội bộ
-    private static final int CONNECT_TIMEOUT_MS = 10_000;
 
-    // Timeout chờ lệnh trả về (ms) — tăng lên nếu server load cao
-    private static final int COMMAND_TIMEOUT_MS = 30_000;
+    // Timeout kết nối TCP (ms) — tăng mặc định cho môi trường route xuyên VLAN (nhiều hop hơn LAN phẳng)
+    @Value("${smartops.ssh.connect-timeout-ms:15000}")
+    private int connectTimeoutMs;
+
+    // Timeout chờ lệnh trả về (ms)
+    @Value("${smartops.ssh.command-timeout-ms:40000}")
+    private int commandTimeoutMs;
 
     private final AesEncryptionUtil aesEncryptionUtil;
 
@@ -62,7 +66,7 @@ public class SshService {
             config.put("PreferredAuthentications", "password");
             session.setConfig(config);
 
-            session.connect(CONNECT_TIMEOUT_MS);
+            session.connect(connectTimeoutMs);
             log.debug("[SSH] Session established for node '{}'", node.getName());
 
             // --- Bước 3: Mở channel exec và chạy lệnh ---
@@ -74,14 +78,14 @@ public class SshService {
             InputStream stderr = channel.getErrStream();
             InputStream stdout = channel.getInputStream();
 
-            channel.connect(CONNECT_TIMEOUT_MS);
+            channel.connect(connectTimeoutMs);
 
             // --- Bước 4: Đọc output ---
             String result = readStream(stdout);
             String errorOutput = readStream(stderr);
 
             // Chờ lệnh hoàn tất với timeout
-            waitForChannelClosure(channel, COMMAND_TIMEOUT_MS);
+            waitForChannelClosure(channel, commandTimeoutMs);
 
             int exitCode = channel.getExitStatus();
             channel.disconnect();

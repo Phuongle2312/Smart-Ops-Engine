@@ -1,6 +1,6 @@
 # 08 — Lịch sử Metrics — Backend
 
-> **Trạng thái:** `[BE v2.0 🔜]` Chưa triển khai. Entity và API endpoint chưa có trong source code.
+> **Trạng thái:** `[BE v1.0 ✅]` Entity, Repository, API endpoints hoàn tất. Cleanup job `[BE v2.0 🔜]`.
 
 ---
 
@@ -13,116 +13,167 @@ Lưu trữ snapshot Disk/CPU/RAM của mỗi Node sau mỗi chu kỳ quét thàn
 
 ---
 
-## Entity: `Node_Metrics`
+## Entity: `NodeMetric`
 
-**Bảng SQL Server:**
+**Bảng SQL Server (tự tạo bởi Hibernate JPA):**
 
-| Cột          | Kiểu             | Ràng buộc         | Mô tả                                         |
-| :----------- | :--------------- | :---------------- | :-------------------------------------------- |
-| `id`         | `BIGINT`         | PK, IDENTITY      |                                               |
-| `node_id`    | `BIGINT`         | FK → `Nodes(id)`  | Liên kết Node                                 |
-| `disk_pct`   | `DECIMAL(5,2)`   | NULL              | % Disk tại thời điểm quét (0.00–100.00)       |
-| `cpu_pct`    | `DECIMAL(5,2)`   | NULL              | % CPU tại thời điểm quét — null nếu SSH lỗi  |
-| `ram_pct`    | `DECIMAL(5,2)`   | NULL              | % RAM tại thời điểm quét — null nếu SSH lỗi  |
-| `checked_at` | `DATETIME2`      | NOT NULL          | Thời điểm thu thập                            |
+| Cột                    | Kiểu         | Ràng buộc         | Mô tả                                       |
+| :--------------------- | :----------- | :---------------- | :------------------------------------------ |
+| `id`                   | `BIGINT`     | PK, IDENTITY      |                                             |
+| `node_id`              | `BIGINT`     | FK → `nodes(id)`  | Liên kết Node, NOT NULL                     |
+| `disk_usage_percent`   | `INT`        | NULL              | % Disk (0–100)                              |
+| `cpu_usage_percent`    | `INT`        | NULL              | % CPU (0–100), -1 nếu SSH lỗi               |
+| `memory_usage_percent` | `INT`        | NULL              | % RAM (0–100), -1 nếu SSH lỗi               |
+| `recorded_at`          | `DATETIME2`  | NOT NULL          | Thời điểm thu thập (auto tạo = LocalDateTime.now()) |
 
-**Index bắt buộc:**
+**Class:**
+```java
+@Entity @Table(name = "node_metrics")
+public class NodeMetric {
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "node_id", nullable = false)
+    private Node node;
+    
+    private Integer diskUsagePercent;
+    private Integer cpuUsagePercent;
+    private Integer memoryUsagePercent;
+    private LocalDateTime recordedAt;
+}
+```
+
+**Index (tạo thủ công nếu cần tối ưu query):**
 ```sql
-CREATE INDEX idx_metrics_node_time ON Node_Metrics(node_id, checked_at DESC);
+CREATE INDEX idx_node_metrics_time ON node_metrics(node_id, recorded_at DESC);
 ```
 
 ---
 
-## Repository: `NodeMetricsRepository`
+## Repository: `NodeMetricRepository`
 
 ```java
-interface NodeMetricsRepository extends JpaRepository<NodeMetrics, Long> {
+@Repository
+public interface NodeMetricRepository extends JpaRepository<NodeMetric, Long> {
 
-    // Lấy metrics theo range thời gian, sắp xếp cũ → mới
-    List<NodeMetrics> findByNodeIdAndCheckedAtBetweenOrderByCheckedAtAsc(
-        Long nodeId, LocalDateTime from, LocalDateTime to
-    );
-
-    // Xóa metrics cũ hơn N ngày (dùng trong cleanup job)
-    void deleteByCheckedAtBefore(LocalDateTime cutoff);
+    // Lấy 50 metrics gần nhất của node, sắp xếp mới → cũ
+    List<NodeMetric> findTop50ByNodeIdOrderByRecordedAtDesc(Long nodeId);
+    
+    // [v2.0 TODO] Lấy metrics theo range thời gian:
+    // List<NodeMetric> findByNodeIdAndRecordedAtBetweenOrderByRecordedAtAsc(
+    //     Long nodeId, LocalDateTime from, LocalDateTime to
+    // );
+    
+    // [v2.0 TODO] Xóa metrics cũ hơn N ngày (cleanup job):
+    // void deleteByRecordedAtBefore(LocalDateTime cutoff);
 }
+```
+
+**Dùng trong HealthCheckScheduler:**
+```java
+// Sau khi collectAndSave() → record được lưu tự động
+// Lấy lịch sử 50 records gần nhất:
+List<NodeMetric> recent = nodeMetricRepository.findTop50ByNodeIdOrderByRecordedAtDesc(nodeId);
 ```
 
 ---
 
 ## Tích hợp vào HealthCheckScheduler
 
-Sau khi `checkDiskUsage()` thành công, thêm lưu snapshot:
+**Tự động:** `NodeMetricsService.collectAndSave()` gọi `nodeMetricRepository.save()` sau khi lấy được metrics 3 thông số.
 
 ```java
-// Trong HealthCheckScheduler.checkDiskUsage():
-nodeMetricsRepository.save(NodeMetrics.builder()
-    .node(node)
-    .diskPct(BigDecimal.valueOf(diskUsagePercent))
-    .cpuPct(cpuUsage != null ? BigDecimal.valueOf(cpuUsage) : null)
-    .ramPct(ramUsage != null ? BigDecimal.valueOf(ramUsage) : null)
-    .checkedAt(LocalDateTime.now())
-    .build()
-);
+// Trong HealthCheckScheduler.checkAllMetrics():
+NodeMetricsSnapshot snap = nodeMetricsService.collectAndSave(node);
+// ↑ Tự động lưu record vào node_metrics + trả về snap
+// Snapshot chứa: { diskPercent, cpuPercent, memoryPercent }
+
+// Sau đó check ngưỡng & gửi alert nếu cần
+if (snap.diskPercent() >= diskCritical) {
+    outlookAlertService.sendMetricsAlert(node.getName(), snap, "DISK_CRITICAL", ...);
+    saveIncidentLog(node, "DISK_CRITICAL", ...);
+}
 ```
 
 ---
 
-## API Endpoint
+## API Endpoints
 
-### GET `/api/nodes/{id}/metrics?range=24h`
+### 1. GET `/api/nodes/{id}/metrics`
 
-**Quyền:** `ROLE_VIEWER` và `ROLE_ADMIN`.
+**Quyền:** Không yêu cầu (v1.0 chưa có authentication).
 
-**Query param `range`:**
-
-| Value | Khoảng thời gian       | Số điểm dữ liệu dự kiến |
-| :---- | :--------------------- | :----------------------- |
-| `24h` | 24 giờ qua             | ~288 (mỗi 5 phút)        |
-| `7d`  | 7 ngày qua             | ~2016                    |
-| `30d` | 30 ngày qua            | ~8640                    |
-
-**Logic:**
-```java
-LocalDateTime to = LocalDateTime.now();
-LocalDateTime from = switch (range) {
-    case "7d"  -> to.minusDays(7);
-    case "30d" -> to.minusDays(30);
-    default    -> to.minusHours(24);   // "24h"
-};
-List<NodeMetrics> metrics = nodeMetricsRepository
-    .findByNodeIdAndCheckedAtBetweenOrderByCheckedAtAsc(nodeId, from, to);
-```
+**Mô tả:** Lấy 50 metrics gần nhất của node (mỗi 5 phút = ~4 giờ lịch sử).
 
 **Response 200:**
 ```json
-{
-  "nodeId": 1,
-  "nodeName": "prod-web-01",
-  "range": "24h",
-  "metrics": [
-    { "checkedAt": "2026-06-24T07:00:00", "diskPct": 85.20, "cpuPct": 45.10, "ramPct": 72.30 },
-    { "checkedAt": "2026-06-24T07:05:00", "diskPct": 85.30, "cpuPct": 52.40, "ramPct": 73.00 }
-  ]
-}
+[
+  {
+    "id": 101,
+    "nodeId": 1,
+    "diskUsagePercent": 85,
+    "cpuUsagePercent": 42,
+    "memoryUsagePercent": 72,
+    "recordedAt": "2026-06-30T14:30:00"
+  },
+  {
+    "id": 100,
+    "nodeId": 1,
+    "diskUsagePercent": 84,
+    "cpuUsagePercent": 38,
+    "memoryUsagePercent": 70,
+    "recordedAt": "2026-06-30T14:25:00"
+  }
+]
 ```
 
 **Response 404:** Node không tồn tại.
 
 ---
 
-## Cleanup Job — Xóa dữ liệu cũ
+### 2. POST `/api/nodes/{id}/check-now`
+
+**Mô tả:** Trigger thu thập metrics ngay lập tức cho node cụ thể (thay vì chờ scheduler).
+
+**Response 200:**
+```json
+{
+  "nodeId": 1,
+  "nodeName": "prod-web-01",
+  "diskPercent": 85,
+  "cpuPercent": 42,
+  "memoryPercent": 72
+}
+```
+
+---
+
+### [v2.0 TODO] Endpoint range thời gian
+
+```
+GET /api/nodes/{id}/metrics?range=24h&limit=50
+```
+
+| Param   | Mô tả                      |
+| :------ | :------------------------- |
+| `range` | `24h` / `7d` / `30d` (mặc định `24h`) |
+| `limit` | Số records tối đa (mặc định 50)       |
+
+---
+
+## Cleanup Job — Xóa dữ liệu cũ `[v2.0 TODO]`
 
 ```java
 @Scheduled(cron = "0 0 2 * * *")  // 02:00 AM mỗi ngày
 public void cleanupOldMetrics() {
-    LocalDateTime cutoff = LocalDateTime.now().minusDays(
-        metricsRetentionDays  // @Value("${smartops.metrics.retention-days:90}")
-    );
-    nodeMetricsRepository.deleteByCheckedAtBefore(cutoff);
-    log.info("[CLEANUP] Đã xóa Node_Metrics cũ hơn {} ngày.", metricsRetentionDays);
+    LocalDateTime cutoff = LocalDateTime.now().minusDays(90);
+    // nodeMetricRepository.deleteByRecordedAtBefore(cutoff);
+    log.info("[CLEANUP] Sẽ xóa NodeMetric cũ hơn 90 ngày.");
 }
 ```
+
+**[v2.0 TODO]:** Thêm method `deleteByRecordedAtBefore()` vào repository.
 
 ---
 

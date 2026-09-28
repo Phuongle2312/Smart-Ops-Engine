@@ -16,6 +16,7 @@ const NodeDetail = lazy(() => import('./views/NodeDetail'));
 const Incidents = lazy(() => import('./views/Incidents'));
 const AlertChannels = lazy(() => import('./views/AlertChannels'));
 const AuditLogs = lazy(() => import('./views/AuditLogs'));
+const SystemConfig = lazy(() => import('./views/SystemConfig'));
 
 // Fallback Page Loader Component
 const PageLoader = () => (
@@ -48,6 +49,7 @@ const AppLayout = () => {
               <Route path="incidents" element={<Incidents />} />
               <Route path="alert-channels" element={<AlertChannels />} />
               <Route path="audit-logs" element={<AuditLogs />} />
+              <Route path="system-config" element={<SystemConfig />} />
               
               {/* Catch-all redirect inside app */}
               <Route path="*" element={<Navigate to="dashboard" replace />} />
