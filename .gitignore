@@ -49,3 +49,25 @@ buildNumber.properties
 # OS files
 Thumbs.db
 Desktop.ini
+
+# .NET (backend-v3)
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+TestResults/
+*.trx
+coverage*.xml
+
+# Node
+node_modules/
+dist/
+
+# Environment secrets — không commit credential thật
+.env
+apps/legacy-v1/.env
+deploy/docker/.env
+*.pem
+jwt-private*.key
