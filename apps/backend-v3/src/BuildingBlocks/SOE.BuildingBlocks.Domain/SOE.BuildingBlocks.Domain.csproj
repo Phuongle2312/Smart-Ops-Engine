@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Lớp Domain dùng chung: KHÔNG được tham chiếu bất kỳ gói hạ tầng nào (EF Core, HTTP, MassTransit) -->
+
+</Project>

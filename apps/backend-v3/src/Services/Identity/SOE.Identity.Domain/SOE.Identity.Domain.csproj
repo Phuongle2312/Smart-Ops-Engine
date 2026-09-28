@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\BuildingBlocks\SOE.BuildingBlocks.Domain\SOE.BuildingBlocks.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

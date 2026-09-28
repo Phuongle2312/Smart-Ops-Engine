@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Hợp đồng integration event/command dùng chung giữa các service (immutable, có version) -->
+
+</Project>
