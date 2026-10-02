@@ -1,6 +1,9 @@
-import React, { useContext, useState, useMemo, useEffect } from 'react';
+import { useContext, useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
+import { usePreferences } from '../context/PreferencesContext';
+import { IncidentTypeChip, StatusBadge } from '../components/IncidentBadges';
+import { resourceLevel, RESOURCE_TEXT, RESOURCE_BAR } from '../constants/incidentMeta';
 import { 
   ResponsiveContainer, 
   LineChart, 
@@ -15,10 +18,7 @@ import {
 import { 
   ArrowLeft, 
   Server, 
-  CheckCircle2, 
-  XCircle, 
   Play, 
-  Edit, 
   Activity, 
   TrendingUp 
 } from 'lucide-react';
@@ -32,12 +32,15 @@ const NodeDetail = () => {
     nodes, 
     incidents, 
     getNodeMetrics, 
+    checkNodeNow,
     toggleNodeActive 
   } = useContext(AppContext);
+  const { t, formatDateTime, chartTheme } = usePreferences();
 
   const [range, setRange] = useState('24h');
   const [chartData, setChartData] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Khóa (node|range) của dữ liệu đã tải xong — khác khóa hiện tại nghĩa là đang tải
+  const [loadedKey, setLoadedKey] = useState(null);
 
   const isAdmin = user?.role === 'ROLE_ADMIN';
 
@@ -53,72 +56,79 @@ const NodeDetail = () => {
       .slice(0, 20);
   }, [incidents, id]);
 
-  // Load metrics history
+  // Load metrics history từ backend
+  const nodeId = node?.id;
   useEffect(() => {
-    if (!node) return;
-    setLoading(true);
-    // Giả lập độ trễ tải mạng
-    const timer = setTimeout(() => {
-      const data = getNodeMetrics(node.id, range);
-      setChartData(data);
-      setLoading(false);
-    }, 400);
+    if (nodeId == null) return undefined;
+    let cancelled = false;
+    getNodeMetrics(nodeId, range)
+      .then((data) => {
+        if (cancelled) return;
+        setChartData(data);
+        setLoadedKey(`${nodeId}|${range}`);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        toast.error(err.message);
+        setChartData([]);
+        setLoadedKey(`${nodeId}|${range}`);
+      });
+    return () => { cancelled = true; };
+  }, [nodeId, range, getNodeMetrics]);
 
-    return () => clearTimeout(timer);
-  }, [node, range, getNodeMetrics]);
+  const loading = node ? loadedKey !== `${node.id}|${range}` : false;
 
   if (!node) {
     return (
       <div className="p-6 text-center">
-        <p className="text-red-400 font-semibold mb-4">Không tìm thấy máy chủ yêu cầu.</p>
+        <p className="text-red-400 font-semibold mb-4">{t('nodeDetail.notFound')}</p>
         <button
           onClick={() => navigate('/app/nodes')}
           className="px-4 py-2 bg-indigo-600 rounded-xl text-white font-semibold text-xs cursor-pointer"
         >
-          Quay lại danh sách
+          {t('nodeDetail.backToList')}
         </button>
       </div>
     );
   }
 
   // Quét ngay tại node này
-  const handleCheckNowLocal = () => {
+  const handleCheckNowLocal = async () => {
     if (!node.active) {
-      toast.error('Máy chủ đang tắt giám sát. Hãy kích hoạt giám sát trước.');
+      toast.error(t('nodeDetail.toastOff'));
       return;
     }
-    toast.success(`Đã kích hoạt quét nhanh máy chủ ${node.name}.`);
-    // Random đổi chỉ số trong giây lát
-    setLoading(true);
-    setTimeout(() => {
-      setRange(r => {
-        // trigger reload data
-        const data = getNodeMetrics(node.id, r);
-        setChartData(data);
-        return r;
-      });
-      setLoading(false);
-    }, 500);
+    toast.success(t('nodeDetail.toastScan', { name: node.name }));
+    setLoadedKey(null);
+    await checkNodeNow(node.id);
+    try {
+      setChartData(await getNodeMetrics(node.id, range));
+    } catch (err) {
+      toast.error(err.message);
+    }
+    setLoadedKey(`${node.id}|${range}`);
   };
 
   // Xác định màu sắc theo ngưỡng tài nguyên
-  const getResourceColorClass = (val, enabled) => {
-    if (!enabled) return 'text-slate-600';
-    if (val >= 90) return 'text-red-400';
-    if (val >= 80) return 'text-yellow-400';
-    return 'text-emerald-400';
-  };
+  const getResourceColorClass = (val, enabled) => (enabled ? RESOURCE_TEXT[resourceLevel(val)] : RESOURCE_TEXT.off);
+
+  // 3 thẻ chỉ số tức thời
+  const gauges = [
+    { key: 'cpu', label: t('nodeDetail.cpu'), icon: Activity, value: node.cpu, monitored: node.monitorCpu },
+    { key: 'disk', label: t('nodeDetail.disk'), icon: Server, value: node.disk, monitored: node.monitorDisk },
+    { key: 'ram', label: t('nodeDetail.ram'), icon: TrendingUp, value: node.ram, monitored: node.monitorRam },
+  ];
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(100vh-4rem)]">
+    <div className="p-6 space-y-6">
       
       {/* Detail Header / Action buttons */}
-      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 bg-slate-950/20 p-4 rounded-2xl border border-slate-800/60">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 glass p-4 rounded-2xl">
         <div className="flex items-center gap-3.5">
           <button
             onClick={() => navigate('/app/nodes')}
-            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-all cursor-pointer"
-            title="Quay lại"
+            className="p-2 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-50 transition-all cursor-pointer"
+            title={t('nodeDetail.back')}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -129,17 +139,17 @@ const NodeDetail = () => {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-heading font-bold text-white leading-none">
+                <h2 className="text-base font-heading font-bold text-slate-50 leading-none">
                   {node.name}
                 </h2>
-                <span className={`px-2 py-0.5 rounded text-[9px] font-semibold flex items-center gap-1 ${
+                <span className={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 ${
                   node.active ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/20' : 'bg-slate-900 text-slate-500 border border-slate-800'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${node.active ? 'bg-emerald-500 pulse-active' : 'bg-slate-600'} inline-block`}></span>
-                  <span>{node.active ? 'Active' : 'Inactive'}</span>
+                  <span>{node.active ? t('nodeDetail.active') : t('nodeDetail.inactive')}</span>
                 </span>
               </div>
-              <p className="text-[10px] text-slate-500 mt-1 font-mono">
+              <p className="text-[11px] text-slate-500 mt-1 font-mono">
                 Host: {node.host} | Port: {node.port} | User: {node.username}
               </p>
             </div>
@@ -150,11 +160,11 @@ const NodeDetail = () => {
         <div className="flex items-center gap-3">
           <button
             onClick={handleCheckNowLocal}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-white text-xs font-semibold active:scale-95 transition-all cursor-pointer"
-            title="Quét lại các thông số kết nối của node này"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-800 hover:border-slate-700 text-slate-300 hover:text-slate-50 text-xs font-semibold active:scale-95 transition-all cursor-pointer"
+            title={t('nodeDetail.checkNowHint')}
           >
             <Play className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Kiểm tra ngay</span>
+            <span>{t('nodeDetail.checkNow')}</span>
           </button>
           {isAdmin && (
             <button
@@ -165,7 +175,7 @@ const NodeDetail = () => {
                   : 'bg-indigo-600 text-white hover:bg-indigo-500'
               }`}
             >
-              <span>{node.active ? 'Tắt giám sát' : 'Bật giám sát'}</span>
+              <span>{node.active ? t('nodeDetail.disableMonitoring') : t('nodeDetail.enableMonitoring')}</span>
             </button>
           )}
         </div>
@@ -173,92 +183,44 @@ const NodeDetail = () => {
 
       {/* Instant metrics gauges (3 Cards) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        
-        {/* Card: CPU */}
-        <div className="glass p-5 rounded-2xl flex flex-col justify-between">
-          <div className="flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <span>Tải CPU Hiện Tại</span>
-            <Activity className="w-4.5 h-4.5 text-slate-500" />
-          </div>
-          <div className="flex items-baseline gap-2 mt-4">
-            <h3 className={`text-4xl font-heading font-bold ${getResourceColorClass(node.cpu, node.active && node.monitorCpu)}`}>
-              {node.active && node.monitorCpu ? `${node.cpu}%` : '-'}
-            </h3>
-            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-              {node.monitorCpu ? 'Monitoring' : 'Not Monitored'}
-            </span>
-          </div>
-          <div className="w-full bg-slate-900 rounded-full h-1.5 mt-4">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-500 ${
-                node.cpu >= 90 ? 'bg-red-500' : node.cpu >= 80 ? 'bg-yellow-500' : 'bg-emerald-500'
-              }`}
-              style={{ width: `${node.active && node.monitorCpu ? node.cpu : 0}%` }}
-            ></div>
-          </div>
-        </div>
-
-        {/* Card: Disk */}
-        <div className="glass p-5 rounded-2xl flex flex-col justify-between">
-          <div className="flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <span>Dung Lượng Ổ Đĩa</span>
-            <Server className="w-4.5 h-4.5 text-slate-500" />
-          </div>
-          <div className="flex items-baseline gap-2 mt-4">
-            <h3 className={`text-4xl font-heading font-bold ${getResourceColorClass(node.disk, node.active && node.monitorDisk)}`}>
-              {node.active && node.monitorDisk ? `${node.disk}%` : '-'}
-            </h3>
-            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-              {node.monitorDisk ? 'Monitoring' : 'Not Monitored'}
-            </span>
-          </div>
-          <div className="w-full bg-slate-900 rounded-full h-1.5 mt-4">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-500 ${
-                node.disk >= 90 ? 'bg-red-500' : node.disk >= 80 ? 'bg-yellow-500' : 'bg-emerald-500'
-              }`}
-              style={{ width: `${node.active && node.monitorDisk ? node.disk : 0}%` }}
-            ></div>
-          </div>
-        </div>
-
-        {/* Card: RAM */}
-        <div className="glass p-5 rounded-2xl flex flex-col justify-between">
-          <div className="flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
-            <span>Sử Dụng RAM</span>
-            <TrendingUp className="w-4.5 h-4.5 text-slate-500" />
-          </div>
-          <div className="flex items-baseline gap-2 mt-4">
-            <h3 className={`text-4xl font-heading font-bold ${getResourceColorClass(node.ram, node.active && node.monitorRam)}`}>
-              {node.active && node.monitorRam ? `${node.ram}%` : '-'}
-            </h3>
-            <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-              {node.monitorRam ? 'Monitoring' : 'Not Monitored'}
-            </span>
-          </div>
-          <div className="w-full bg-slate-900 rounded-full h-1.5 mt-4">
-            <div 
-              className={`h-1.5 rounded-full transition-all duration-500 ${
-                node.ram >= 90 ? 'bg-red-500' : node.ram >= 80 ? 'bg-yellow-500' : 'bg-emerald-500'
-              }`}
-              style={{ width: `${node.active && node.monitorRam ? node.ram : 0}%` }}
-            ></div>
-          </div>
-        </div>
-
+        {gauges.map(({ key, label, icon: Icon, value, monitored }) => {
+          const enabled = node.active && monitored;
+          return (
+            <div key={key} className="glass p-5 rounded-2xl flex flex-col justify-between">
+              <div className="flex justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <span>{label}</span>
+                <Icon className="w-4.5 h-4.5 text-slate-500" />
+              </div>
+              <div className="flex items-baseline gap-2 mt-4">
+                <h3 className={`text-4xl font-heading font-bold ${getResourceColorClass(value, enabled)}`}>
+                  {enabled ? `${value}%` : '-'}
+                </h3>
+                <span className="text-[11px] text-slate-500 font-semibold uppercase tracking-wider">
+                  {monitored ? t('nodeDetail.monitoring') : t('nodeDetail.notMonitored')}
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-1.5 mt-4">
+                <div
+                  className={`h-1.5 rounded-full transition-all duration-500 ${RESOURCE_BAR[resourceLevel(value)]}`}
+                  style={{ width: `${enabled ? value : 0}%` }}
+                ></div>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Recharts Historical Metrics Graph */}
-      <div className="glass p-5 rounded-2xl flex flex-col h-96 relative border border-slate-800">
+      <div className="glass p-5 rounded-2xl flex flex-col h-96 relative">
         {loading && (
-          <div className="absolute inset-0 bg-[#0b0f19]/40 backdrop-blur-xs flex items-center justify-center z-10 rounded-2xl">
+          <div className="absolute inset-0 bg-[var(--soe-bg)]/40 backdrop-blur-xs flex items-center justify-center z-10 rounded-2xl">
             <span className="w-8 h-8 rounded-full border-3 border-indigo-600/30 border-t-indigo-600 animate-spin"></span>
           </div>
         )}
 
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-          <h3 className="text-sm font-semibold text-slate-300 font-heading">
-            Biểu đồ xu hướng tài nguyên hệ thống
+          <h3 className="text-sm font-semibold text-slate-100 font-heading">
+            {t('nodeDetail.trendTitle')}
           </h3>
           
           {/* Time range picker */}
@@ -267,11 +229,11 @@ const NodeDetail = () => {
               <button
                 key={r}
                 onClick={() => setRange(r)}
-                className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-colors cursor-pointer ${
+                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                   range === r ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {r === '24h' ? '24 Giờ' : r === '7d' ? '7 Ngày' : '30 Ngày'}
+                {t(`nodeDetail.range.${r}`)}
               </button>
             ))}
           </div>
@@ -282,103 +244,89 @@ const NodeDetail = () => {
           {node.active && chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.5} />
-                <XAxis dataKey="time" stroke="#64748b" fontSize={10} tickLine={false} />
-                <YAxis stroke="#64748b" fontSize={10} tickLine={false} domain={[0, 100]} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.grid} />
+                <XAxis dataKey="time" stroke={chartTheme.axis} fontSize={11} tickLine={false} />
+                <YAxis stroke={chartTheme.axis} fontSize={11} tickLine={false} domain={[0, 100]} />
                 <ChartTooltip
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }}
-                  labelStyle={{ color: '#9ca3af', fontWeight: 'bold', fontSize: '11px' }}
-                  itemStyle={{ color: '#f3f4f6', fontSize: '11px' }}
+                  contentStyle={{ backgroundColor: chartTheme.tooltipBg, borderColor: chartTheme.tooltipBorder, borderRadius: '8px' }}
+                  labelStyle={{ color: chartTheme.tooltipLabel, fontWeight: 'bold', fontSize: '12px' }}
+                  itemStyle={{ color: chartTheme.tooltipText, fontSize: '12px' }}
                 />
-                <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: '11px' }} />
+                <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '12px' }} />
                 
                 {/* Horizontal guidance thresholds */}
-                <ReferenceLine y={80} label={{ value: 'Warning', fill: '#eab308', fontSize: 10, position: 'insideTopLeft' }} stroke="#eab308" strokeDasharray="3 3" />
-                <ReferenceLine y={90} label={{ value: 'Critical', fill: '#ef4444', fontSize: 10, position: 'insideTopLeft' }} stroke="#ef4444" strokeDasharray="3 3" />
+                <ReferenceLine y={80} label={{ value: t('nodeDetail.warning'), fill: '#f59e0b', fontSize: 10, position: 'insideTopLeft' }} stroke="#f59e0b" strokeDasharray="3 3" />
+                <ReferenceLine y={90} label={{ value: t('nodeDetail.critical'), fill: '#ef4444', fontSize: 10, position: 'insideTopLeft' }} stroke="#ef4444" strokeDasharray="3 3" />
 
                 {/* Disk: Blue, CPU: Orange, RAM: Purple */}
                 {node.monitorDisk && (
-                  <Line type="monotone" dataKey="disk" name="Dung lượng Disk" stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="disk" name={t('nodeDetail.lineDisk')} stroke="#3b82f6" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 )}
                 {node.monitorCpu && (
-                  <Line type="monotone" dataKey="cpu" name="Tải CPU" stroke="#f97316" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="cpu" name={t('nodeDetail.lineCpu')} stroke="#f97316" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 )}
                 {node.monitorRam && (
-                  <Line type="monotone" dataKey="ram" name="Sử dụng RAM" stroke="#a855f7" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                  <Line type="monotone" dataKey="ram" name={t('nodeDetail.lineRam')} stroke="#a855f7" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 )}
               </LineChart>
             </ResponsiveContainer>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-slate-500 text-xs">
               {!node.active 
-                ? 'Đã tắt tính năng giám sát máy chủ. Biểu đồ lịch sử tạm ngắt.' 
-                : 'Đang chuẩn bị nạp dữ liệu thống kê...'}
+                ? t('nodeDetail.monitoringOff')
+                : t('nodeDetail.preparing')}
             </div>
           )}
         </div>
       </div>
 
       {/* Node incidents table history */}
-      <div className="glass p-5 rounded-2xl border border-slate-800">
-        <h3 className="text-sm font-semibold text-slate-300 font-heading mb-4">
-          Lịch sử sự cố của riêng máy chủ này (Tối đa 20)
+      <div className="glass p-5 rounded-2xl">
+        <h3 className="text-sm font-semibold text-slate-100 font-heading mb-4">
+          {t('nodeDetail.historyTitle')}
         </h3>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-800 text-slate-400 font-medium">
-                <th className="py-2.5 px-3">Loại sự cố</th>
-                <th className="py-2.5 px-3">Chi tiết sự cố</th>
-                <th className="py-2.5 px-3">Người xử lý</th>
-                <th className="py-2.5 px-3">Thời gian phát hiện</th>
-                <th className="py-2.5 px-3">Trạng thái</th>
+                <th className="py-2.5 px-3">{t('nodeDetail.colType')}</th>
+                <th className="py-2.5 px-3">{t('nodeDetail.colDetail')}</th>
+                <th className="py-2.5 px-3">{t('nodeDetail.colAssignee')}</th>
+                <th className="py-2.5 px-3">{t('nodeDetail.colTime')}</th>
+                <th className="py-2.5 px-3">{t('nodeDetail.colStatus')}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {nodeIncidents.length > 0 ? (
                 nodeIncidents.map((inc) => (
                   <tr key={inc.id} className="hover:bg-slate-900/10 text-slate-300 transition-colors">
-                    <td className="py-3 px-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                        inc.incidentType.includes('CRITICAL') || inc.incidentType === 'SSH_FAILURE'
-                          ? 'bg-red-950/40 text-red-400 border border-red-500/20'
-                          : 'bg-yellow-950/40 text-yellow-400 border border-yellow-500/20'
-                      }`}>
-                        {inc.incidentType}
-                      </span>
+                    <td className="py-3 px-3 min-w-[150px]">
+                      <IncidentTypeChip type={inc.incidentType} />
                     </td>
                     <td className="py-3 px-3" title={inc.issueDescription}>
                       {inc.issueDescription}
                       {inc.resolutionAction && (
-                        <p className="text-[10px] text-emerald-400 mt-1 font-medium bg-emerald-950/20 p-1.5 rounded-lg border border-emerald-500/10">
-                          <strong>Khắc phục:</strong> {inc.resolutionAction}
+                        <p className="text-[11px] text-emerald-400 mt-1 font-medium bg-emerald-950/20 p-1.5 rounded-lg border border-emerald-500/10">
+                          <strong>{t('common.fix')}:</strong> {inc.resolutionAction}
                         </p>
                       )}
                     </td>
                     <td className="py-3 px-3 text-slate-400">
-                      {inc.assignee || 'Chưa ghi nhận'}
+                      {inc.assignee || t('nodeDetail.unassigned')}
                     </td>
-                    <td className="py-3 px-3 text-slate-400 font-mono">
-                      {new Date(inc.detectedAt).toLocaleString('vi-VN')}
+                    <td className="py-3 px-3 text-slate-400 whitespace-nowrap">
+                      {formatDateTime(inc.detectedAt)}
                     </td>
                     <td className="py-3 px-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                        inc.status === 'OPEN'
-                          ? 'bg-red-500/10 text-red-500 border border-red-500/10'
-                          : inc.status === 'ACKNOWLEDGED'
-                          ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/10'
-                          : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/10'
-                      }`}>
-                        {inc.status}
-                      </span>
+                      <StatusBadge status={inc.status} />
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
                   <td colSpan={5} className="py-6 text-center text-slate-500">
-                    Máy chủ hoạt động tốt. Chưa từng xảy ra sự cố.
+                    {t('nodeDetail.noIncidents')}
                   </td>
                 </tr>
               )}

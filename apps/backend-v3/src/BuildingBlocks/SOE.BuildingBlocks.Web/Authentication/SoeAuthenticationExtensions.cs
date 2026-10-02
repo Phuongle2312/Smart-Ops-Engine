@@ -50,6 +50,9 @@ public static class SoeAuthenticationExtensions
         var audience = section["Audience"] ?? "soe-api";
         var authority = section["Authority"];
 
+        var explicitRequireHttps = section.GetValue<bool?>("RequireHttpsMetadata");
+        var effectiveRequireHttps = explicitRequireHttps ?? requireHttpsMetadata;
+
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
             {
@@ -59,7 +62,7 @@ public static class SoeAuthenticationExtensions
                     options.MetadataAddress = $"{authority.TrimEnd('/')}/.well-known/openid-configuration";
                 }
 
-                options.RequireHttpsMetadata = requireHttpsMetadata;
+                options.RequireHttpsMetadata = effectiveRequireHttps;
                 options.MapInboundClaims = false;
 
                 options.TokenValidationParameters = new TokenValidationParameters

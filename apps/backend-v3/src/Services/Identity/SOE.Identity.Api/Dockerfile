@@ -12,6 +12,7 @@ RUN dotnet publish "src/Services/Identity/SOE.Identity.Api/SOE.Identity.Api.cspr
     -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
+RUN apk add --no-cache icu-libs
 RUN adduser -D -u 10001 soe
 WORKDIR /app
 COPY --from=build /app/publish .

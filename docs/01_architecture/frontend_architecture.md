@@ -1,7 +1,7 @@
 # Kiến trúc Frontend — React 19 + Vite + Tailwind CSS 4
 
 > Ba tiêu chí bắt buộc: **hiệu năng** (§4), **chống lỗ hổng bảo mật** (§5), **validate dữ liệu** (§6).
-> Hiện trạng: SPA đã có 9 màn hình nhưng dùng mock data trong `AppContext` + `localStorage`. Tài liệu này mô tả đích đến v3.
+> Hiện trạng: SPA đã có 8 màn hình nhưng dùng mock data trong `AppContext` + `localStorage`. Tài liệu này mô tả đích đến v3.
 
 ---
 

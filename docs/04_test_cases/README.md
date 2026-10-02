@@ -72,3 +72,5 @@
 ## 6. Quy ước ghi kết quả
 
 Cột trạng thái được thêm khi thực thi: `Chưa test` · `Đạt` · `Lỗi` · `Bị chặn` · `Không áp dụng`. Lỗi ghi kèm mã issue và ảnh chụp/log.
+
+> **Bản Excel:** toàn bộ use case và test case được tổng hợp ở [../SOE_UseCase_TestCase.xlsx](../SOE_UseCase_TestCase.xlsx) (lọc theo phân hệ/ưu tiên, ghi kết quả chạy). Sửa Markdown rồi chạy `python tools/scripts/build_test_docs.py` để sinh lại — không sửa tay các cột nguồn.

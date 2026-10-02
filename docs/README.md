@@ -67,6 +67,9 @@ docs/
 | [03_usecases/](03_usecases/README.md) — 28 use case | ✅ Draft |
 | [04_test_cases/](04_test_cases/README.md) — 9 module + bảo mật/hiệu năng/contract | ✅ Draft |
 | [05_traceability_matrix.md](05_traceability_matrix.md) | ✅ Draft |
+| [06_workplan.md](06_workplan.md) — phân chia công việc | ✅ |
+| [07_huong_dan_chay_thu.md](07_huong_dan_chay_thu.md) — hướng dẫn chạy thử & phiếu ghi kết quả | ✅ |
+| [SOE_UseCase_TestCase.xlsx](SOE_UseCase_TestCase.xlsx) — bảng Excel tổng hợp 28 use case (từng bước/luồng) + 532 test case v3 + 141 test case v1, có cột ghi kết quả; sinh bằng `python tools/scripts/build_test_docs.py` | ✅ |
 
 ## 4. Quy ước định danh (ID)
 

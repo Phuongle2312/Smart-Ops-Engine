@@ -1,10 +1,13 @@
-import React, { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
+import { usePreferences } from '../context/PreferencesContext';
+import PreferenceToggles from '../components/PreferenceToggles';
 import { Eye, EyeOff, ShieldCheck, User } from 'lucide-react';
 
 const Login = () => {
   const { login, accessToken } = useContext(AppContext);
+  const { t } = usePreferences();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState('');
@@ -23,7 +26,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setError('Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu.');
+      setError(t('login.missing'));
       return;
     }
     setError('');
@@ -33,7 +36,7 @@ const Login = () => {
       await login(username, password);
       navigate('/app/dashboard');
     } catch (err) {
-      setError(err.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.');
+      setError(err.message || t('login.failed'));
     } finally {
       setLoading(false);
     }
@@ -45,22 +48,27 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#070a13] flex flex-col justify-center items-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[var(--soe-bg)] flex flex-col justify-center items-center px-4 relative overflow-hidden">
+      {/* Theme + language */}
+      <div className="absolute top-4 right-4 z-10">
+        <PreferenceToggles />
+      </div>
+
       {/* Background Gradients decoration */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-indigo-500/10 blur-[120px] pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-purple-500/10 blur-[120px] pointer-events-none"></div>
 
-      <div className="w-full max-w-md glass rounded-3xl p-8 shadow-2xl relative border border-slate-800">
+      <div className="w-full max-w-md glass rounded-3xl p-8 shadow-2xl relative">
         {/* Brand Header */}
         <div className="text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-4 shadow-xl shadow-indigo-500/10">
             <span className="font-heading font-extrabold text-white text-2xl tracking-wider">SO</span>
           </div>
-          <h2 className="text-2xl font-heading font-bold text-white tracking-wide">
+          <h2 className="text-2xl font-heading font-bold text-slate-50 tracking-wide">
             Smart Ops Engine
           </h2>
-          <p className="text-slate-400 text-xs mt-1 font-medium tracking-wide">
-            HỆ THỐNG GIÁM SÁT VẬN HÀNH THỜI GIAN THỰC
+          <p className="text-slate-400 text-xs mt-1 font-medium tracking-wide uppercase">
+            {t('login.subtitle')}
           </p>
         </div>
 
@@ -74,21 +82,21 @@ const Login = () => {
 
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Tên đăng nhập
+              {t('login.username')}
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
-              placeholder="Nhập tên đăng nhập..."
-              className="w-full px-4 py-3 rounded-xl bg-slate-900/60 border border-slate-800/80 focus:border-indigo-500 focus:outline-none text-sm text-slate-200 placeholder-slate-600 transition-colors"
+              placeholder={t('login.usernamePlaceholder')}
+              className="w-full px-4 py-3 rounded-xl bg-slate-900/60 border border-slate-800/80 focus:border-indigo-500 focus:outline-none text-sm text-slate-200 placeholder-slate-500 transition-colors"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              Mật khẩu
+              {t('login.password')}
             </label>
             <div className="relative">
               <input
@@ -96,8 +104,8 @@ const Login = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
-                placeholder="Nhập mật khẩu..."
-                className="w-full px-4 py-3 rounded-xl bg-slate-900/60 border border-slate-800/80 focus:border-indigo-500 focus:outline-none text-sm text-slate-200 placeholder-slate-600 transition-colors pr-10"
+                placeholder={t('login.passwordPlaceholder')}
+                className="w-full px-4 py-3 rounded-xl bg-slate-900/60 border border-slate-800/80 focus:border-indigo-500 focus:outline-none text-sm text-slate-200 placeholder-slate-500 transition-colors pr-10"
               />
               <button
                 type="button"
@@ -117,15 +125,15 @@ const Login = () => {
             {loading ? (
               <span className="w-5 h-5 rounded-full border-2 border-white/20 border-t-white animate-spin"></span>
             ) : (
-              <span>Đăng nhập</span>
+              <span>{t('login.submit')}</span>
             )}
           </button>
         </form>
 
         {/* Quick Testing accounts info */}
         <div className="mt-8 pt-6 border-t border-slate-800/80">
-          <p className="text-xs text-slate-500 text-center mb-3 font-semibold">
-            TÀI KHOẢN ĐĂNG NHẬP NHANH (DEMO)
+          <p className="text-xs text-slate-500 text-center mb-3 font-semibold uppercase">
+            {t('login.demoAccounts')}
           </p>
           <div className="grid grid-cols-2 gap-3">
             <button
@@ -133,14 +141,14 @@ const Login = () => {
               className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-purple-950/20 hover:bg-purple-950/30 border border-purple-500/20 text-purple-400 text-xs font-semibold transition-colors cursor-pointer"
             >
               <ShieldCheck className="w-3.5 h-3.5" />
-              <span>Quyền Admin</span>
+              <span>{t('login.demoAdmin')}</span>
             </button>
             <button
               onClick={() => autofill('viewer')}
               className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-950/20 hover:bg-emerald-950/30 border border-emerald-500/20 text-emerald-400 text-xs font-semibold transition-colors cursor-pointer"
             >
               <User className="w-3.5 h-3.5" />
-              <span>Quyền Viewer</span>
+              <span>{t('login.demoViewer')}</span>
             </button>
           </div>
         </div>

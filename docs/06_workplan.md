@@ -65,10 +65,10 @@ Giao diện và Audit chạy song song được; Kubernetes làm sau cùng.
 |---|---|---|---|---|
 | 1 | Nối giao diện vào API thật (bỏ mock): cài axios, TanStack Query, zod, react-hook-form; tách `AppContext` | `apps/web/src/` | TC-IDN-E2E-001…012 | P1 |
 | 2 | Test tích hợp API bằng `WebApplicationFactory` + Testcontainers | `apps/backend-v3/tests/SOE.IntegrationTests/` | TC-IDN-API-* | P1 |
-| 3 | Test cho Gateway (định tuyến, JWT, RBAC, rate limit, header) | `apps/backend-v3/tests/SOE.Gateway.Tests/` | TC-GW-SEC-001…018 | P1 |
+| 3 | Test cho Gateway (định tuyến, JWT, RBAC, rate limit, header) — smoke `tools/scripts/smoke-m1.ps1` mới phủ TC-GW-SEC-001…003 | `apps/backend-v3/tests/SOE.Gateway.Tests/` | TC-GW-SEC-001…018 | P1 |
 | 4 | Rate limit dùng Redis thay bộ đếm trong tiến trình | `.../src/Gateway/`, `.../Identity.Api` | TC-GW-SEC-012 | P2 |
 | 5 | Khóa ký JWT cố định (PEM qua secret) thay khóa tạm sinh khi khởi động | `deploy/docker/.env`, `tools/scripts/` | TC-GW-SEC-007 | P2 |
-| 6 | Workflow CI đầu tiên (build + test + quét bảo mật) | `.github/workflows/` | — | P2 |
+| 6 | Workflow CI đầu tiên (build + test + quét bảo mật) — có thể gọi lại `tools/scripts/test-all.ps1` | `.github/workflows/` | — | P2 |
 
 ---
 

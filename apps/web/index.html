@@ -2,9 +2,26 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Smart Ops Engine Dashboard - Hệ thống giám sát vận hành máy chủ và cảnh báo sự cố thời gian thực chất lượng cao." />
+    <script>
+      // Áp theme + ngôn ngữ đã lưu trước khi React render để tránh nháy màu
+      (function () {
+        try {
+          var theme = localStorage.getItem('soe_theme');
+          if (theme !== 'light' && theme !== 'dark') {
+            theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          }
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme;
+          var lang = localStorage.getItem('soe_lang');
+          if (lang === 'en' || lang === 'vi') document.documentElement.lang = lang;
+        } catch (e) {
+          document.documentElement.dataset.theme = 'dark';
+        }
+      })();
+    </script>
     <title>Smart Ops Dashboard - Giám Sát Vận Hành Thời Gian Thực</title>
   </head>
   <body>

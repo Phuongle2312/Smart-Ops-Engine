@@ -34,7 +34,7 @@
 | TC-SEC-INJ-002 | Command injection qua `host`, `username`, `diskMountPath` (`; rm -rf /`, `$(id)`, backtick) | Bị validate chặn; lệnh SSH không bị thay đổi | P1 | BR-MON-001 |
 | TC-SEC-INJ-003 | Header injection qua giá trị người dùng (CRLF) | Bị loại bỏ, không tách được header | P2 | — |
 | TC-SEC-INJ-004 | XSS lưu trữ: tạo node tên `<img src=x onerror=alert(1)>` | Hiển thị dưới dạng văn bản trên mọi màn hình và trong email cảnh báo | P1 | FE §5 S1 |
-| TC-SEC-INJ-005 | CSV injection: mô tả bắt đầu bằng `=cmd|` | Khi xuất CSV, giá trị được thoát (prefix `'`) | P3 | FR-MET-011 |
+| TC-SEC-INJ-005 | CSV injection: mô tả bắt đầu bằng `=cmd\|` | Khi xuất CSV, giá trị được thoát (prefix `'`) | P3 | FR-MET-011 |
 | TC-SEC-INJ-006 | Path traversal trong tham số tệp/xuất | Không truy cập được tệp ngoài phạm vi | P2 | — |
 
 ## 3. Bảo mật Frontend
@@ -45,11 +45,11 @@
 | TC-SEC-FE-002 | CSP hiệu lực | Header CSP có mặt; chèn inline script bị chặn; không dùng `unsafe-inline` cho `script-src` | P1 | FE §5 |
 | TC-SEC-FE-003 | Không dùng `dangerouslySetInnerHTML` | Quét mã nguồn: 0 kết quả (hoặc có kèm DOMPurify và ghi chú duyệt) | P1 | FE §5 S1 |
 | TC-SEC-FE-004 | Clickjacking | Nhúng ứng dụng trong iframe → bị chặn bởi `frame-ancestors 'none'` | P2 | FE §5 S4 |
-| TC-SEC-FE-005 | Open redirect | Đăng nhập với `?returnUrl=https://evil.com` | Bỏ qua, chuyển về Dashboard | P1 | FE §5 S9 |
-| TC-SEC-FE-006 | CSRF | Gửi form từ site khác tới `/api/v1/nodes` với cookie sẵn có | Thất bại (thiếu Bearer token, `SameSite=Strict`) | P1 | FE §5 S3 |
+| TC-SEC-FE-005 | Open redirect | Đăng nhập với `?returnUrl=https://evil.com` → bỏ qua, chuyển về Dashboard | P1 | FE §5 S9 |
+| TC-SEC-FE-006 | CSRF | Gửi form từ site khác tới `/api/v1/nodes` với cookie sẵn có → thất bại (thiếu Bearer token, `SameSite=Strict`) | P1 | FE §5 S3 |
 | TC-SEC-FE-007 | Console/sourcemap ở production | Không log payload nhạy cảm; không publish sourcemap | P2 | FE §5 S6, S10 |
-| TC-SEC-FE-008 | Phân quyền chỉ là giao diện | Dùng devtools bật nút ẩn của VIEWER rồi bấm | API trả 403; dữ liệu không đổi | P1 | FE §5 S7 |
-| TC-SEC-FE-009 | Tự đăng xuất & xóa cache | Sau khi đăng xuất, kiểm tra bộ nhớ ứng dụng | Không còn dữ liệu người dùng trong cache | P2 | FE §5 S11 |
+| TC-SEC-FE-008 | Phân quyền chỉ là giao diện | Dùng devtools bật nút ẩn của VIEWER rồi bấm → API trả 403; dữ liệu không đổi | P1 | FE §5 S7 |
+| TC-SEC-FE-009 | Tự đăng xuất & xóa cache | Sau khi đăng xuất, kiểm tra bộ nhớ ứng dụng → không còn dữ liệu người dùng trong cache | P2 | FE §5 S11 |
 
 ## 4. Bảo mật dữ liệu & bí mật
 

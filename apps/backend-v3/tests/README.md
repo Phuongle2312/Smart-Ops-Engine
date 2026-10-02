@@ -12,6 +12,7 @@ Quy ước cấp test và mẫu test case: [docs/04_test_cases/README.md](../../
 | `SOE.Gateway.Tests` | API/SEC | Định tuyến, JWT, RBAC, rate limit, security header | 🔜 M1 còn nợ |
 
 Kiểm thử E2E (Playwright) nằm ở `apps/web/tests/`; kiểm thử hiệu năng (k6) nằm ở `tools/perf/`.
+Smoke test API trên service đang chạy: `tools/scripts/smoke-m1.ps1` (14 kiểm tra TC-IDN-API / TC-GW-SEC).
 
 ## Nguyên tắc
 

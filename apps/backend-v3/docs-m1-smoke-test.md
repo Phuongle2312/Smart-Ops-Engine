@@ -3,6 +3,10 @@
 Đối chiếu với [docs/04_test_cases/TC-01_identity.md](../../docs/04_test_cases/TC-01_identity.md).
 Chạy sau khi Identity đã khởi động ở `http://localhost:5001` (hoặc qua Gateway `http://localhost:8080`).
 
+> Các mục 1–5, 7 (phần xoay vòng), 9, 10 đã được tự động hóa trong
+> [tools/scripts/smoke-m1.ps1](../../tools/scripts/smoke-m1.ps1); `tools/scripts/test-all.ps1 -Smoke` tự khởi động
+> service rồi chạy script đó. Mục 6 (khóa tài khoản) và 8 (đổi mật khẩu) vẫn kiểm tra tay vì làm thay đổi tài khoản admin.
+
 ## 0. Khởi động
 
 ```bash

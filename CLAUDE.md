@@ -35,6 +35,14 @@ Chuỗi kết nối và secret truyền qua biến môi trường (`ConnectionSt
 --project src\Services\Identity\SOE.Identity.Infrastructure --startup-project src\Services\Identity\SOE.Identity.Api
 --output-dir Persistence\Migrations`.
 
+**Chạy toàn bộ kiểm thử** (từ gốc repo, PowerShell):
+
+```powershell
+.\tools\scripts\test-all.ps1                      # backend-v3 test + web lint/build + legacy-v1 test
+.\tools\scripts\test-all.ps1 -Smoke -ConnectionString '<chuỗi kết nối>'   # kèm smoke test API Identity + Gateway
+.\tools\scripts\smoke-m1.ps1 -AdminPassword '<mật khẩu>'   # chỉ smoke test, service đã chạy sẵn
+```
+
 **Frontend** (chạy trong thư mục `apps/web/`):
 
 ```powershell
@@ -62,9 +70,12 @@ Cần biết:
 
 ## Kiến trúc frontend
 
-- `src/views/` — 7 view: `Login`, `Dashboard`, `Nodes`, `NodeDetail`, `Incidents`, `AlertChannels`, `AuditLogs`
+- `src/views/` — 8 view: `Login`, `Dashboard`, `Nodes`, `NodeDetail`, `Incidents`, `AlertChannels`, `AuditLogs`, `SystemConfig`
 - `src/components/` — `Header`, `Sidebar`, `PrivateRoute`
 - `src/context/AppContext.jsx` — state tập trung bằng **Context API** (không dùng Redux)
+- `src/context/PreferencesContext.jsx` — theme sáng/tối + ngôn ngữ VI/EN (`usePreferences()` → `t()`, `formatDateTime`, `formatRelative`, `chartTheme`). Từ điển ở `src/i18n/vi.js` / `en.js` — **thêm chuỗi UI mới phải thêm khóa vào cả hai file**, không hardcode text trong JSX.
+- Theme sáng hoạt động bằng cách **đảo biến màu Tailwind** (`--color-slate-*`, sắc 300/400/900/950) dưới `:root[data-theme="light"]` trong `index.css`. Tiêu đề dùng `text-slate-50` (tự đảo), chỉ giữ `text-white` cho chữ trên nền màu đặc (nút indigo/red). Màu Recharts lấy từ `chartTheme`.
+- `src/constants/incidentMeta.js` — nguồn duy nhất cho màu / mức độ loại sự cố, badge trạng thái, ngưỡng tài nguyên; hiển thị qua `components/IncidentBadges.jsx`.
 - **Trạng thái hiện tại: MOCK** — dữ liệu lưu ở `localStorage`, chưa gọi API thật. Auth giả (`admin/admin`, `viewer/viewer`); WebSocket & metrics giả lập bằng `setInterval`.
 
 ## Quy ước code
@@ -77,7 +88,8 @@ Cần biết:
 
 - **AES dùng ECB mode** (không IV) — không an toàn cho production; nên nâng lên AES/GCM.
 - **Nguy cơ double-encrypt:** không gọi `AesEncryptionUtil.encrypt()` thủ công trong `NodeController` vì `CryptoConverter` đã tự encrypt khi persist. Kiểm tra kỹ luồng lưu Node.
-- Secret key AES và credential email đang **hardcode** trong `application.properties` — không commit thêm secret; cân nhắc chuyển sang biến môi trường.
+- Secret key AES, mật khẩu DB và SMTP của v1 đọc từ **biến môi trường** (xem `apps/legacy-v1/.env.example`) — không commit giá trị thật.
+- `appsettings.Development.json` của Identity chứa mật khẩu dev mẫu (`sa`, admin) — chỉ dùng cục bộ; máy dev thường phải ghi đè `ConnectionStrings__Default` (ví dụ `Integrated Security=True`).
 - Nhiều tính năng (Auth/JWT, WebSocket thật, Audit log, Metrics history) mới là **kế hoạch v2.0** — frontend đang mock, backend bổ sung dần (metrics-history là phần đang làm dở).
 
 ## Tài liệu tham chiếu

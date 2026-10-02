@@ -51,6 +51,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       Jwt__Authority: http://identity:8080
+      Jwt__RequireHttpsMetadata: "false"
       Cors__AllowedOrigins__0: ${FRONTEND_ORIGIN:-http://localhost:5173}
       ReverseProxy__Clusters__identity__Destinations__identity-1__Address: http://identity:8080/
     ports:

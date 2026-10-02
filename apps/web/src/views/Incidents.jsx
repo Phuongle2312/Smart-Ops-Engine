@@ -1,16 +1,16 @@
-import React, { useContext, useState, useEffect, useMemo } from 'react';
+import { useContext, useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
+import { usePreferences } from '../context/PreferencesContext';
+import { IncidentTypeChip, SeverityBadge, StatusBadge } from '../components/IncidentBadges';
+import ResolveIncidentModal from '../components/ResolveIncidentModal';
 import { 
-  AlertTriangle, 
   Search, 
   Filter, 
   RotateCcw, 
   ChevronLeft, 
-  ChevronRight, 
-  CheckCircle,
-  HelpCircle,
-  Eye
+  ChevronRight,
+  ShieldCheck
 } from 'lucide-react';
 
 const PAGE_SIZE = 10; // Thay đổi 10 thay vì 20 bản ghi/trang để demo trực quan hơn
@@ -24,6 +24,7 @@ const Incidents = () => {
     acknowledgeIncident,
     newIncidentId 
   } = useContext(AppContext);
+  const { t, formatDateTime } = usePreferences();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const isAdmin = user?.role === 'ROLE_ADMIN';
@@ -39,18 +40,16 @@ const Incidents = () => {
   // --- Pagination states ---
   const [currentPage, setCurrentPage] = useState(1);
 
-  // --- Modal states ---
-  const [resolveModalOpen, setResolveModalOpen] = useState(false);
-  const [currentIncidentId, setCurrentIncidentId] = useState(null);
-  const [resolutionAction, setResolutionAction] = useState('');
+  // --- Modal state: ID sự cố đang mở hộp thoại xử lý ---
+  const [resolvingId, setResolvingId] = useState(null);
 
-  // Sync URL search parameters if status is chosen
-  useEffect(() => {
-    const urlStatus = searchParams.get('status');
-    if (urlStatus) {
-      setStatusFilter(urlStatus);
-    }
-  }, [searchParams]);
+  // Đồng bộ bộ lọc trạng thái khi tham số ?status= trên URL thay đổi (điều chỉnh state ngay khi render)
+  const urlStatus = searchParams.get('status');
+  const [prevUrlStatus, setPrevUrlStatus] = useState(urlStatus);
+  if (urlStatus !== prevUrlStatus) {
+    setPrevUrlStatus(urlStatus);
+    if (urlStatus) setStatusFilter(urlStatus);
+  }
 
   // Search Debounce (300ms)
   useEffect(() => {
@@ -95,21 +94,25 @@ const Incidents = () => {
       const q = debouncedSearch.toLowerCase().trim();
       result = result.filter(inc => 
         inc.node.name.toLowerCase().includes(q) || 
-        inc.incidentType.toLowerCase().includes(q) || 
+        inc.incidentType.toLowerCase().includes(q) ||
+        t(`incidentType.${inc.incidentType}`).toLowerCase().includes(q) || 
         inc.issueDescription.toLowerCase().includes(q)
       );
     }
 
     return result;
-  }, [incidents, statusFilter, nodeFilter, typeFilter, debouncedSearch]);
+  }, [incidents, statusFilter, nodeFilter, typeFilter, debouncedSearch, t]);
 
   // --- Pagination Logic ---
   const totalPages = Math.ceil(filteredIncidents.length / PAGE_SIZE) || 1;
   
   // Reset trang về 1 khi thay đổi bộ lọc
-  useEffect(() => {
+  const filterKey = `${statusFilter}|${nodeFilter}|${typeFilter}|${debouncedSearch}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
     setCurrentPage(1);
-  }, [statusFilter, nodeFilter, typeFilter, debouncedSearch]);
+  }
 
   const paginatedIncidents = useMemo(() => {
     const startIndex = (currentPage - 1) * PAGE_SIZE;
@@ -119,16 +122,12 @@ const Incidents = () => {
   // --- Actions ---
   const handleResolveOpen = (id) => {
     if (!isAdmin) return;
-    setCurrentIncidentId(id);
-    setResolutionAction('');
-    setResolveModalOpen(true);
+    setResolvingId(id);
   };
 
-  const handleResolveSubmit = (e) => {
-    e.preventDefault();
-    if (!resolutionAction.trim()) return;
-    resolveIncident(currentIncidentId, resolutionAction);
-    setResolveModalOpen(false);
+  const handleResolveSubmit = (id, resolution) => {
+    resolveIncident(id, resolution);
+    setResolvingId(null);
   };
 
   const handleAcknowledge = (id) => {
@@ -143,67 +142,67 @@ const Incidents = () => {
   }, [incidents]);
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(100vh-4rem)]">
+    <div className="p-6 space-y-6">
       
       {/* Search and Filters Bar */}
-      <div className="glass p-5 rounded-2xl border border-slate-800 space-y-4">
+      <div className="glass p-5 rounded-2xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-          <h3 className="text-xs font-semibold text-slate-300 font-heading flex items-center gap-1.5">
+          <h3 className="text-sm font-semibold text-slate-100 font-heading flex items-center gap-1.5">
             <Filter className="w-4 h-4 text-indigo-400" />
-            <span>Thanh công cụ lọc sự cố</span>
+            <span>{t('incidents.filters.title')}</span>
           </h3>
           <button
             onClick={resetFilters}
-            className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold rounded-lg border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3 h-3" />
-            <span>Reset bộ lọc</span>
+            <span>{t('incidents.filters.reset')}</span>
           </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           {/* Keyword Search */}
           <div className="relative">
-            <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Từ khóa tìm kiếm</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('incidents.filters.keyword')}</label>
             <div className="relative">
               <input
                 type="text"
                 value={searchVal}
                 onChange={(e) => setSearchVal(e.target.value)}
-                placeholder="Nhập tên node, lỗi..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 placeholder-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
+                placeholder={t('incidents.filters.keywordPlaceholder')}
+                className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-slate-900/60 border border-slate-700/50 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none transition-colors font-medium"
               />
-              <Search className="w-4 h-4 text-slate-600 absolute left-3 top-2.5" />
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
             </div>
           </div>
 
           {/* Status Filter */}
           <div>
-            <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Trạng thái sự cố</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('incidents.filters.status')}</label>
             <select
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
                 setSearchParams(e.target.value === 'ALL' ? {} : { status: e.target.value });
               }}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 focus:border-indigo-500 focus:outline-none cursor-pointer"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/60 border border-slate-700/50 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none cursor-pointer font-medium"
             >
-              <option value="ALL">Tất cả trạng thái</option>
-              <option value="OPEN">Chưa xử lý (OPEN)</option>
-              <option value="ACKNOWLEDGED">Đang xử lý (ACKNOWLEDGED)</option>
-              <option value="RESOLVED">Đã giải quyết (RESOLVED)</option>
+              <option value="ALL">{t('incidents.filters.allStatuses')}</option>
+              {['OPEN', 'ACKNOWLEDGED', 'RESOLVED'].map(s => (
+                <option key={s} value={s}>{t(`status.${s}`)}</option>
+              ))}
             </select>
           </div>
 
           {/* Node Filter */}
           <div>
-            <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Máy chủ gặp lỗi</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('incidents.filters.node')}</label>
             <select
               value={nodeFilter}
               onChange={(e) => setNodeFilter(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 focus:border-indigo-500 focus:outline-none cursor-pointer"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/60 border border-slate-700/50 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none cursor-pointer font-medium"
             >
-              <option value="ALL">Tất cả máy chủ</option>
+              <option value="ALL">{t('incidents.filters.allNodes')}</option>
               {nodes.map(n => (
                 <option key={n.id} value={n.id}>{n.name}</option>
               ))}
@@ -212,15 +211,15 @@ const Incidents = () => {
 
           {/* Type Filter */}
           <div>
-            <label className="block text-[10px] font-semibold text-slate-500 uppercase mb-1">Loại cảnh báo</label>
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('incidents.filters.type')}</label>
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 focus:border-indigo-500 focus:outline-none cursor-pointer"
+              className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/60 border border-slate-700/50 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none cursor-pointer font-medium"
             >
-              <option value="ALL">Tất cả loại lỗi</option>
-              {allTypes.map(t => (
-                <option key={t} value={t}>{t}</option>
+              <option value="ALL">{t('incidents.filters.allTypes')}</option>
+              {allTypes.map(type => (
+                <option key={type} value={type}>{t(`incidentType.${type}`)}</option>
               ))}
             </select>
           </div>
@@ -228,23 +227,23 @@ const Incidents = () => {
       </div>
 
       {/* Incident Log Table */}
-      <div className="glass rounded-2xl border border-slate-800 overflow-hidden flex flex-col min-h-[440px]">
+      <div className="glass rounded-2xl overflow-hidden flex flex-col min-h-[440px] border border-slate-200 dark:border-slate-800/80 shadow-xs">
         <div className="flex-1 overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+          <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="border-b border-slate-800 bg-slate-900/30 text-slate-400 font-medium">
-                <th className="py-3 px-4">ID</th>
-                <th className="py-3 px-4">Máy chủ</th>
-                <th className="py-3 px-4">Loại sự cố</th>
-                <th className="py-3 px-4">Chi tiết lỗi đo được</th>
-                <th className="py-3 px-4 text-center">Số lần</th>
-                <th className="py-3 px-4">Thời gian xảy ra</th>
-                <th className="py-3 px-4">Người xử lý</th>
-                <th className="py-3 px-4">Trạng thái</th>
-                {isAdmin && <th className="py-3 px-4 text-right">Thao tác</th>}
+              <tr className="border-b border-slate-200 dark:border-slate-800 bg-slate-900/60 dark:bg-slate-900/30 text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider">
+                <th className="py-3.5 px-4">{t('incidents.table.id')}</th>
+                <th className="py-3.5 px-4">{t('incidents.table.node')}</th>
+                <th className="py-3.5 px-4">{t('incidents.table.type')}</th>
+                <th className="py-3.5 px-4">{t('incidents.table.detail')}</th>
+                <th className="py-3.5 px-4 text-center">{t('incidents.table.count')}</th>
+                <th className="py-3.5 px-4">{t('incidents.table.time')}</th>
+                <th className="py-3.5 px-4">{t('incidents.table.assignee')}</th>
+                <th className="py-3.5 px-4">{t('incidents.table.status')}</th>
+                {isAdmin && <th className="py-3.5 px-4 text-right">{t('incidents.table.actions')}</th>}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/40">
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800/40">
               {paginatedIncidents.length > 0 ? (
                 paginatedIncidents.map((inc) => {
                   // Class highlight khi có WebSocket incident mới
@@ -253,48 +252,35 @@ const Incidents = () => {
                   return (
                     <tr 
                       key={inc.id} 
-                      className={`text-slate-300 transition-colors ${
-                        isNewWS ? 'incident-highlight' : 'hover:bg-slate-900/15'
+                      className={`text-slate-700 dark:text-slate-300 transition-colors ${
+                        isNewWS ? 'incident-highlight' : 'hover:bg-slate-900/80 dark:hover:bg-slate-800/40'
                       }`}
                     >
-                      <td className="py-3.5 px-4 font-mono text-slate-500">#{inc.id}</td>
-                      <td className="py-3.5 px-4 font-semibold text-slate-200">{inc.node.name}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold font-mono ${
-                          inc.incidentType.includes('CRITICAL') || inc.incidentType === 'SSH_FAILURE'
-                            ? 'bg-red-950/40 text-red-400 border border-red-500/20'
-                            : 'bg-yellow-950/40 text-yellow-400 border border-yellow-500/20'
-                        }`}>
-                          {inc.incidentType}
-                        </span>
+                      <td className="py-3.5 px-4 font-mono text-xs text-slate-400 font-bold">#{inc.id}</td>
+                      <td className="py-3.5 px-4 font-bold text-sm text-slate-100">{inc.node.name}</td>
+                      <td className="py-3.5 px-4 min-w-[160px]">
+                        <IncidentTypeChip type={inc.incidentType} />
+                        <div className="mt-1"><SeverityBadge type={inc.incidentType} /></div>
                       </td>
-                      <td className="py-3.5 px-4 max-w-[240px] truncate" title={inc.issueDescription}>
-                        {inc.issueDescription}
+                      <td className="py-3.5 px-4 min-w-[240px] max-w-[360px] text-sm">
+                        <span className="line-clamp-2 font-medium" title={inc.issueDescription}>{inc.issueDescription}</span>
                         {inc.resolutionAction && (
-                          <div className="text-[10px] text-emerald-400 font-semibold mt-1">
-                            <span className="text-slate-500">Khắc phục:</span> {inc.resolutionAction}
+                          <div className="text-xs text-emerald-400 font-medium mt-1 line-clamp-2" title={inc.resolutionAction}>
+                            <span className="text-slate-500">{t('common.fix')}:</span> {inc.resolutionAction}
                           </div>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-center font-bold font-mono text-indigo-400">
+                      <td className="py-3.5 px-4 text-center font-bold font-mono text-sm text-indigo-400">
                         {inc.count}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400 font-mono">
-                        {new Date(inc.detectedAt).toLocaleString('vi-VN')}
+                      <td className="py-3.5 px-4 text-xs text-slate-400 whitespace-nowrap font-mono">
+                        {formatDateTime(inc.detectedAt)}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400">
+                      <td className="py-3.5 px-4 text-xs text-slate-400">
                         {inc.assignee || '-'}
                       </td>
                       <td className="py-3.5 px-4">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                          inc.status === 'OPEN'
-                            ? 'bg-red-500/10 text-red-500 border border-red-500/10'
-                            : inc.status === 'ACKNOWLEDGED'
-                            ? 'bg-yellow-500/10 text-yellow-500 border border-yellow-500/10'
-                            : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/10'
-                        }`}>
-                          {inc.status}
-                        </span>
+                        <StatusBadge status={inc.status} />
                       </td>
                       
                       {/* Admin-only Operations */}
@@ -304,19 +290,19 @@ const Incidents = () => {
                             {inc.status === 'OPEN' && (
                               <button
                                 onClick={() => handleAcknowledge(inc.id)}
-                                className="px-2 py-1 rounded bg-yellow-950/30 hover:bg-yellow-950/60 text-yellow-400 border border-yellow-500/20 hover:border-yellow-500/40 font-semibold cursor-pointer active:scale-95"
-                                title="Đánh dấu đã ghi nhận đang xử lý"
+                                className="px-2.5 py-1 rounded-lg border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 font-semibold cursor-pointer active:scale-95 whitespace-nowrap"
+                                title={t('actions.acknowledgeHint')}
                               >
-                                Ack
+                                {t('actions.acknowledge')}
                               </button>
                             )}
                             {inc.status !== 'RESOLVED' && (
                               <button
                                 onClick={() => handleResolveOpen(inc.id)}
-                                className="px-2 py-1 rounded bg-red-950/30 hover:bg-red-950/60 text-red-400 border border-red-500/20 hover:border-red-500/40 font-semibold cursor-pointer active:scale-95"
-                                title="Giải quyết dứt điểm sự cố"
+                                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold cursor-pointer active:scale-95 whitespace-nowrap"
+                                title={t('actions.resolveHint')}
                               >
-                                Resolve
+                                {t('actions.resolve')}
                               </button>
                             )}
                           </div>
@@ -327,8 +313,20 @@ const Incidents = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={isAdmin ? 9 : 8} className="py-12 text-center text-slate-500">
-                    Không tìm thấy bản ghi sự cố nào phù hợp.
+                  <td colSpan={isAdmin ? 9 : 8} className="py-16 text-center">
+                    <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-center">
+                      <div className="w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-3 shadow-xs">
+                        <ShieldCheck className="w-7 h-7" />
+                      </div>
+                      <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">
+                        Hệ thống hoàn toàn ổn định
+                      </h4>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        {debouncedSearch || statusFilter !== 'ALL' || nodeFilter !== 'ALL' || typeFilter !== 'ALL'
+                          ? 'Không tìm thấy sự cố nào phù hợp với bộ lọc hiện tại. Thử đặt lại bộ lọc.'
+                          : 'Không có sự cố nào được ghi nhận. Toàn bộ máy chủ đang trong trạng thái an toàn.'}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -338,25 +336,25 @@ const Incidents = () => {
 
         {/* Pagination controls */}
         <div className="p-4 border-t border-slate-800/80 bg-slate-950/20 flex items-center justify-between">
-          <span className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">
-            Hiển thị {paginatedIncidents.length}/{filteredIncidents.length} sự cố
+          <span className="text-xs text-slate-500 font-semibold">
+            {t('incidents.table.showing', { shown: paginatedIncidents.length, total: filteredIncidents.length })}
           </span>
           
           <div className="flex items-center gap-4">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-slate-50 disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
             >
               <ChevronLeft className="w-4.5 h-4.5" />
             </button>
             <span className="text-xs font-semibold text-slate-300">
-              Trang {currentPage} / {totalPages}
+              {t('common.page', { current: currentPage, total: totalPages })}
             </span>
             <button
               onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
               disabled={currentPage === totalPages}
-              className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-slate-50 disabled:opacity-30 disabled:hover:text-slate-400 transition-colors cursor-pointer"
             >
               <ChevronRight className="w-4.5 h-4.5" />
             </button>
@@ -365,47 +363,12 @@ const Incidents = () => {
       </div>
 
       {/* --- RESOLVE INCIDENT MODAL (ADMIN ONLY) --- */}
-      {resolveModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="w-full max-w-md glass border border-slate-800 rounded-2xl shadow-2xl overflow-hidden">
-            <div className="flex justify-between items-center p-5 border-b border-slate-800/80 bg-slate-950/20">
-              <h3 className="text-sm font-heading font-semibold text-white">
-                Giải quyết sự cố #{currentIncidentId}
-              </h3>
-            </div>
-            <form onSubmit={handleResolveSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-[10px] font-semibold text-slate-400 uppercase mb-2">
-                  Biện pháp khắc phục lỗi *
-                </label>
-                <textarea
-                  rows={3}
-                  required
-                  value={resolutionAction}
-                  onChange={(e) => setResolutionAction(e.target.value)}
-                  placeholder="Ghi chú chi tiết cách bạn đã khắc phục (ví dụ: đã dọn dẹp dung lượng ổ đĩa, giải phóng RAM)..."
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-200 placeholder-slate-700 focus:border-indigo-500 focus:outline-none transition-colors"
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setResolveModalOpen(false)}
-                  className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-slate-200 border border-slate-800 hover:border-slate-700 rounded-xl transition-all cursor-pointer"
-                >
-                  Hủy bỏ
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-all shadow-md shadow-indigo-600/10 cursor-pointer"
-                >
-                  Xác nhận giải quyết
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {resolvingId !== null && (
+        <ResolveIncidentModal
+          incidentId={resolvingId}
+          onSubmit={handleResolveSubmit}
+          onClose={() => setResolvingId(null)}
+        />
       )}
 
     </div>

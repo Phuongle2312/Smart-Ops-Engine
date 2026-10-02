@@ -1,15 +1,99 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 
+/* Chế độ tối/sáng điều khiển bằng thuộc tính data-theme trên <html> */
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
 :root {
   --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
   --font-heading: 'Outfit', system-ui, sans-serif;
+
+  /* Token bề mặt — giao diện tối (mặc định) */
+  --soe-bg: #070a13;
+  --soe-text: #f3f4f6;
+  --soe-glass: rgba(15, 23, 42, 0.45);
+  --soe-glass-hover: rgba(15, 23, 42, 0.65);
+  --soe-glass-border: rgba(255, 255, 255, 0.06);
+  --soe-glass-shadow: none;
+  --soe-scroll-track: #0f172a;
+  --soe-scroll-thumb: #334155;
+  --soe-scroll-thumb-hover: #475569;
+  --soe-skeleton-a: #1e293b;
+  --soe-skeleton-b: #334155;
+  --soe-overlay: rgba(0, 0, 0, 0.6);
+}
+
+/*
+ * Giao diện sáng: đảo thang màu slate và làm đậm các sắc màu nhấn (300/400) để đủ tương phản
+ * trên nền sáng; nền tối của badge (900/950) chuyển thành nền nhạt. Nhờ vậy các class Tailwind
+ * hiện có (text-slate-300, bg-red-950/40...) tự đổi theo theme mà không cần viết lại từng view.
+ */
+:root[data-theme="light"] {
+  --soe-bg: #f1f5f9;
+  --soe-text: #0f172a;
+  --soe-glass: rgba(255, 255, 255, 0.85);
+  --soe-glass-hover: #ffffff;
+  --soe-glass-border: rgba(15, 23, 42, 0.08);
+  --soe-glass-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 3px rgba(15, 23, 42, 0.06);
+  --soe-scroll-track: #e2e8f0;
+  --soe-scroll-thumb: #94a3b8;
+  --soe-scroll-thumb-hover: #64748b;
+  --soe-skeleton-a: #e2e8f0;
+  --soe-skeleton-b: #cbd5e1;
+  --soe-overlay: rgba(15, 23, 42, 0.35);
+
+  --color-slate-50: #020617;
+  --color-slate-100: #0f172a;
+  --color-slate-200: #1e293b;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748b;
+  --color-slate-600: #94a3b8;
+  --color-slate-700: #cbd5e1;
+  --color-slate-800: #e2e8f0;
+  --color-slate-900: #f1f5f9;
+  --color-slate-950: #f8fafc;
+
+  --color-red-300: #b91c1c;
+  --color-red-400: #dc2626;
+  --color-red-900: #fee2e2;
+  --color-red-950: #fef2f2;
+  --color-amber-300: #b45309;
+  --color-amber-400: #b45309;
+  --color-amber-900: #fef3c7;
+  --color-amber-950: #fffbeb;
+  --color-yellow-300: #a16207;
+  --color-yellow-400: #a16207;
+  --color-yellow-500: #ca8a04;
+  --color-yellow-900: #fef9c3;
+  --color-yellow-950: #fefce8;
+  --color-emerald-300: #047857;
+  --color-emerald-400: #059669;
+  --color-emerald-900: #d1fae5;
+  --color-emerald-950: #ecfdf5;
+  --color-indigo-300: #4338ca;
+  --color-indigo-400: #4f46e5;
+  --color-indigo-900: #e0e7ff;
+  --color-indigo-950: #eef2ff;
+  --color-orange-300: #c2410c;
+  --color-orange-400: #ea580c;
+  --color-orange-950: #fff7ed;
+  --color-pink-300: #be185d;
+  --color-pink-400: #db2777;
+  --color-pink-950: #fdf2f8;
+  --color-purple-300: #7e22ce;
+  --color-purple-400: #9333ea;
+  --color-purple-950: #faf5ff;
+  --color-teal-400: #0d9488;
+  --color-blue-400: #2563eb;
+  --color-sky-400: #0284c7;
+  --color-sky-950: #f0f9ff;
 }
 
 body {
   font-family: var(--font-sans);
-  background-color: #0b0f19;
-  color: #f3f4f6;
+  background-color: var(--soe-bg);
+  color: var(--soe-text);
   margin: 0;
   padding: 0;
   overflow-x: hidden;
@@ -23,72 +107,218 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #0f172a;
+  background: var(--soe-scroll-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--soe-scroll-thumb);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--soe-scroll-thumb-hover);
 }
 
 /* Micro-animations and utility classes */
 .glass {
-  background: rgba(15, 23, 42, 0.45);
+  background: var(--soe-glass);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--soe-glass-border);
+  box-shadow: var(--soe-glass-shadow);
 }
 
 .glass-hover {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .glass-hover:hover {
-  background: rgba(15, 23, 42, 0.65);
+  background: var(--soe-glass-hover);
   border-color: rgba(99, 102, 241, 0.35);
   box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.15);
   transform: translateY(-2px);
 }
 
-/* Status dots pulse animations */
+/* Cyber Tech Grid Background */
+.bg-tech-grid {
+  background-image: radial-gradient(rgba(99, 102, 241, 0.12) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Status dots pulse animations - Soft & Gentle */
 @keyframes pulse-green {
   0%, 100% {
     transform: scale(1);
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7);
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
   }
   50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+    transform: scale(1.08);
+    opacity: 0.85;
+    box-shadow: 0 0 0 5px rgba(16, 185, 129, 0);
   }
 }
 
 .pulse-active {
-  animation: pulse-green 2s infinite;
+  animation: pulse-green 2.5s infinite;
 }
 
 @keyframes pulse-red {
   0%, 100% {
     transform: scale(1);
     opacity: 1;
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.6);
   }
   50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+    transform: scale(1.08);
+    opacity: 0.85;
+    box-shadow: 0 0 0 5px rgba(244, 63, 94, 0);
   }
 }
 
 .pulse-alert {
-  animation: pulse-red 1.5s infinite;
+  animation: pulse-red 2s infinite;
+}
+
+/* Soft, Calibrated Alert Accents (Non-glaring, eye-friendly) */
+@keyframes glow-critical {
+  0%, 100% {
+    border-color: rgba(244, 63, 94, 0.45);
+    box-shadow: 0 4px 18px -4px rgba(244, 63, 94, 0.18), inset 0 0 10px -3px rgba(244, 63, 94, 0.06);
+  }
+  50% {
+    border-color: rgba(244, 63, 94, 0.2);
+    box-shadow: 0 2px 8px -2px rgba(244, 63, 94, 0.08);
+  }
+}
+
+.glow-card-critical {
+  animation: glow-critical 3.5s ease-in-out infinite;
+}
+
+@keyframes glow-warning {
+  0%, 100% {
+    border-color: rgba(245, 158, 11, 0.45);
+    box-shadow: 0 4px 16px -4px rgba(245, 158, 11, 0.15), inset 0 0 8px -3px rgba(245, 158, 11, 0.05);
+  }
+  50% {
+    border-color: rgba(245, 158, 11, 0.2);
+    box-shadow: 0 2px 6px -2px rgba(245, 158, 11, 0.06);
+  }
+}
+
+.glow-card-warning {
+  animation: glow-warning 4s ease-in-out infinite;
+}
+
+/* Radar Rotating Sweep Effect - Smooth & Subtle */
+@keyframes radar-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-sweep {
+  background: conic-gradient(from 0deg at 50% 50%, rgba(99, 102, 241, 0) 0deg, rgba(99, 102, 241, 0.03) 240deg, rgba(99, 102, 241, 0.25) 360deg);
+  animation: radar-spin 4s linear infinite;
+  transform-origin: center center;
+}
+
+/* Siren gentle vibration */
+@keyframes emergency-siren {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.05) rotate(-3deg); }
+  75% { transform: scale(1.05) rotate(3deg); }
+}
+
+.animate-siren {
+  animation: emergency-siren 2.5s ease-in-out infinite;
+}
+
+/* Cyber Scanning Line - Ultra subtle */
+@keyframes scanline-move {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.35; }
+  100% { transform: translateY(800%); opacity: 0; }
+}
+
+.cyber-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent 0%, rgba(244, 63, 94, 0.5) 50%, transparent 100%);
+  animation: scanline-move 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Warning Stripes Animation */
+@keyframes move-stripes {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+.warning-stripes-red {
+  background-image: linear-gradient(
+    45deg,
+    rgba(239, 68, 68, 0.12) 25%,
+    transparent 25%,
+    transparent 50%,
+    rgba(239, 68, 68, 0.12) 50%,
+    rgba(239, 68, 68, 0.12) 75%,
+    transparent 75%,
+    transparent
+  );
+  background-size: 24px 24px;
+  animation: move-stripes 2.5s linear infinite;
+}
+
+/* HUD Corner Brackets */
+.hud-corner-tl {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid rgba(99, 102, 241, 0.8);
+  border-left: 2px solid rgba(99, 102, 241, 0.8);
+  border-top-left-radius: 4px;
+}
+.hud-corner-tr {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid rgba(99, 102, 241, 0.8);
+  border-right: 2px solid rgba(99, 102, 241, 0.8);
+  border-top-right-radius: 4px;
+}
+.hud-corner-bl {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border-bottom: 2px solid rgba(99, 102, 241, 0.8);
+  border-left: 2px solid rgba(99, 102, 241, 0.8);
+  border-bottom-left-radius: 4px;
+}
+.hud-corner-br {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  border-bottom: 2px solid rgba(99, 102, 241, 0.8);
+  border-right: 2px solid rgba(99, 102, 241, 0.8);
+  border-bottom-right-radius: 4px;
 }
 
 /* Fade out highlight animation for new WebSocket incidents */
 @keyframes highlight-fade {
   0% {
-    background-color: rgba(234, 179, 8, 0.25);
+    background-color: rgba(239, 68, 68, 0.35);
   }
   100% {
     background-color: transparent;
@@ -102,16 +332,31 @@ body {
 /* Skeleton Loading Animation */
 @keyframes skeleton-loading {
   0% {
-    background-color: #1e293b;
+    background-color: var(--soe-skeleton-a);
   }
   50% {
-    background-color: #334155;
+    background-color: var(--soe-skeleton-b);
   }
   100% {
-    background-color: #1e293b;
+    background-color: var(--soe-skeleton-a);
   }
 }
 
 .skeleton {
   animation: skeleton-loading 1.5s infinite ease-in-out;
+}
+
+/* Ngăn chuyển màu nhấp nháy khi đổi theme */
+html[data-theme] body {
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Drawer giả lập trượt vào từ phải */
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawer-in {
+  animation: drawer-in 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }

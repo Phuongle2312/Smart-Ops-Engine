@@ -20,11 +20,13 @@ Smart-Ops-Engine/
 ```
 
 Ai làm phần nào, thứ tự triển khai: [docs/06_workplan.md](docs/06_workplan.md).
+Chạy thử từng phần và ghi kết quả: [docs/07_huong_dan_chay_thu.md](docs/07_huong_dan_chay_thu.md).
 
 ## Bắt đầu nhanh
 
 | Việc | Lệnh |
 |---|---|
+| **Chạy toàn bộ kiểm thử** | `.\tools\scripts\test-all.ps1` (thêm `-Smoke` để kiểm thử API thật) |
 | Build & test backend v3 | `dotnet test apps/backend-v3/SmartOpsEngine.sln` |
 | Chạy Identity (v3) | `dotnet run --project apps/backend-v3/src/Services/Identity/SOE.Identity.Api --urls http://localhost:5001` |
 | Chạy Gateway (v3) | `dotnet run --project apps/backend-v3/src/Gateway/SOE.Gateway --urls http://localhost:8080` |
@@ -38,8 +40,8 @@ Ai làm phần nào, thứ tự triển khai: [docs/06_workplan.md](docs/06_work
 |---|---|
 | Tài liệu đặc tả v3 | ✅ Hoàn chỉnh — 44 tài liệu, ~210 yêu cầu chức năng, 28 use case, ~330 test case |
 | `apps/backend-v3` | 🟡 M1 xong: BuildingBlocks + Gateway + Identity (49 test xanh); M2–M5 chưa bắt đầu |
-| `apps/web` | 🟡 Đủ 9 màn hình nhưng còn chạy **mock** — chưa nối API thật |
-| `apps/legacy-v1` | 🟢 Đang chạy được, không phát triển thêm |
+| `apps/web` | 🟡 Đủ 8 màn hình, lint sạch, nhưng còn chạy **mock** — chưa nối API thật |
+| `apps/legacy-v1` | 🟢 Đang chạy được (6 test xanh), không phát triển thêm |
 | `deploy` | 🟡 Có Docker Compose cho M1; Kubernetes chưa làm |
 | CI/CD | 🔴 Chưa có |
 

@@ -10,7 +10,6 @@ import com.soe.scheduler.HealthCheckScheduler;
 import com.soe.service.NodeMetricsService;
 import com.soe.service.NodeMetricsService.NodeMetricsSnapshot;
 import com.soe.service.OutlookAlertService;
-import com.soe.util.AesEncryptionUtil;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,36 +42,49 @@ public class NodeController {
     @GetMapping("/nodes")
     public ResponseEntity<List<NodeResponse>> getAllNodes() {
         List<NodeResponse> response = nodeRepository.findAll().stream()
-                .map(NodeResponse::from)
+                .map(this::toResponse)
                 .toList();
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/nodes")
     public ResponseEntity<NodeResponse> addNode(@Valid @RequestBody NodeRequest request) {
-        // Mã hóa mật khẩu bằng Utility đã có
-        String encryptedPassword = AesEncryptionUtil.encrypt(request.password());
-
         Node node = Node.builder()
                 .name(request.name())
                 .host(request.host())
                 .port(request.port() != null ? request.port() : 22)
                 .username(request.username())
-                .password(encryptedPassword) // Sử dụng trường password trong Node entity
+                .password(request.password()) // CryptoConverter tự mã hóa khi persist — không encrypt thủ công (tránh double-encrypt)
                 .description(request.description())
                 .active(true)
                 .build();
 
         Node saved = nodeRepository.save(node);
         log.info("[API] Đã tạo Node mới: {}", saved.getName());
-        return ResponseEntity.status(HttpStatus.CREATED).body(NodeResponse.from(saved));
+        return ResponseEntity.status(HttpStatus.CREATED).body(toResponse(saved));
     }
 
     @GetMapping("/nodes/{id}")
     public ResponseEntity<NodeResponse> getNodeById(@PathVariable Long id) {
         return nodeRepository.findById(id)
-                .map(NodeResponse::from)
+                .map(this::toResponse)
                 .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PutMapping("/nodes/{id}")
+    public ResponseEntity<NodeResponse> updateNode(@PathVariable Long id, @RequestBody NodeRequest request) {
+        return nodeRepository.findById(id)
+                .map(node -> {
+                    if (request.name() != null) node.setName(request.name());
+                    if (request.host() != null) node.setHost(request.host());
+                    if (request.port() != null) node.setPort(request.port());
+                    if (request.username() != null) node.setUsername(request.username());
+                    if (request.description() != null) node.setDescription(request.description());
+                    // Chỉ đổi mật khẩu khi client gửi giá trị mới
+                    if (request.password() != null && !request.password().isBlank()) node.setPassword(request.password());
+                    return ResponseEntity.ok(toResponse(nodeRepository.save(node)));
+                })
                 .orElse(ResponseEntity.notFound().build());
     }
 
@@ -138,18 +150,41 @@ public class NodeController {
     }
 
     @GetMapping("/nodes/{id}/metrics")
-    public ResponseEntity<List<NodeMetric>> getNodeMetrics(@PathVariable Long id) {
+    public ResponseEntity<List<MetricPoint>> getNodeMetrics(
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "24h") String range) {
         if (!nodeRepository.existsById(id)) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(nodeMetricRepository.findTop50ByNodeIdOrderByRecordedAtDesc(id));
+        LocalDateTime since = LocalDateTime.now().minusHours(switch (range) {
+            case "7d" -> 24L * 7;
+            case "30d" -> 24L * 30;
+            default -> 24L;
+        });
+        List<MetricPoint> points = nodeMetricRepository
+                .findByNodeIdAndRecordedAtAfterOrderByRecordedAtAsc(id, since).stream()
+                .map(MetricPoint::from)
+                .toList();
+        return ResponseEntity.ok(points);
     }
 
     @GetMapping("/incidents")
-    public ResponseEntity<List<IncidentLog>> getRecentIncidents() {
-        return ResponseEntity.ok(incidentLogRepository.findTop50ByOrderByDetectedAtDesc());
+    public ResponseEntity<List<IncidentResponse>> getRecentIncidents() {
+        return ResponseEntity.ok(incidentLogRepository.findTop50ByOrderByDetectedAtDesc().stream()
+                .map(IncidentResponse::from)
+                .toList());
+    }
+
+    @PutMapping("/incidents/{id}/acknowledge")
+    public ResponseEntity<IncidentResponse> acknowledgeIncident(@PathVariable Long id) {
+        return incidentLogRepository.findById(id)
+                .map(incident -> {
+                    if ("OPEN".equals(incident.getStatus())) incident.setStatus("ACKNOWLEDGED");
+                    return ResponseEntity.ok(IncidentResponse.from(incidentLogRepository.save(incident)));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PutMapping("/incidents/{id}/resolve")
-    public ResponseEntity<IncidentLog> resolveIncident(
+    public ResponseEntity<IncidentResponse> resolveIncident(
             @PathVariable Long id, 
             @RequestBody(required = false) Map<String, String> body) {
         return incidentLogRepository.findById(id)
@@ -163,7 +198,7 @@ public class NodeController {
                     }
                     IncidentLog updated = incidentLogRepository.save(incident);
                     log.info("[API] Đã giải quyết sự cố ID: {}", id);
-                    return ResponseEntity.ok(updated);
+                    return ResponseEntity.ok(IncidentResponse.from(updated));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -193,17 +228,39 @@ public class NodeController {
     // --- DTOs (Records) ---
     public record NodeRequest(String name, String host, Integer port, String username, String password, String description) {}
     
-    public record NodeResponse(Long id, String name, String host, int port, String username, String description, boolean active) {
-        public static NodeResponse from(Node node) {
-        return new NodeResponse(
-                node.getId(), 
-                node.getName(), 
-                node.getHost(),
-                node.getPort(), 
-                node.getUsername(), 
-                node.getDescription(), 
-                node.isActive() 
-        );
+    /** Chỉ số mới nhất của node (null nếu chưa có lần đo nào; -1 = đo lỗi). */
+    private NodeResponse toResponse(Node node) {
+        NodeMetric m = nodeMetricRepository.findFirstByNodeIdOrderByRecordedAtDesc(node.getId()).orElse(null);
+        return NodeResponse.from(node, m);
+    }
+
+    public record NodeResponse(Long id, String name, String host, int port, String username, String description,
+                               boolean active, Integer cpu, Integer disk, Integer ram, LocalDateTime lastCheckedAt) {
+        public static NodeResponse from(Node node, NodeMetric m) {
+            return new NodeResponse(
+                    node.getId(), node.getName(), node.getHost(), node.getPort(),
+                    node.getUsername(), node.getDescription(), node.isActive(),
+                    m == null ? null : m.getCpuUsagePercent(),
+                    m == null ? null : m.getDiskUsagePercent(),
+                    m == null ? null : m.getMemoryUsagePercent(),
+                    m == null ? null : m.getRecordedAt());
+        }
+    }
+
+    public record MetricPoint(LocalDateTime timestamp, Integer cpu, Integer disk, Integer ram) {
+        public static MetricPoint from(NodeMetric m) {
+            return new MetricPoint(m.getRecordedAt(), m.getCpuUsagePercent(), m.getDiskUsagePercent(), m.getMemoryUsagePercent());
+        }
+    }
+
+    public record IncidentResponse(Long id, NodeRef node, String incidentType, String issueDescription,
+                                   String resolutionAction, String status, LocalDateTime detectedAt, LocalDateTime resolvedAt) {
+        public record NodeRef(Long id, String name) {}
+
+        public static IncidentResponse from(IncidentLog i) {
+            return new IncidentResponse(i.getId(), new NodeRef(i.getNode().getId(), i.getNode().getName()),
+                    i.getIncidentType(), i.getIssueDescription(), i.getResolutionAction(),
+                    i.getStatus(), i.getDetectedAt(), i.getResolvedAt());
         }
     }
 }

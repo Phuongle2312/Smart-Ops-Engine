@@ -41,6 +41,7 @@ buildNumber.properties
 *.iml
 *.iws
 .vscode/
+.claude/
 .settings/
 .classpath
 .project
