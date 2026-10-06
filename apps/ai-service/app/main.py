@@ -7,6 +7,8 @@ from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from . import library
+from .agent import DiagnosisAgent
+from .llm import OllamaChat, OpenAIChat
 from .config import Settings, get_settings
 from .knowledge import KeywordRetriever, KnowledgeBase, QdrantRetriever
 from .ocr import build_ocr
@@ -28,7 +30,13 @@ def build_state(cfg: Settings) -> dict:
     ollama = OllamaVision(cfg.ollama_url, cfg.vision_model, cfg.vision_timeout_s)
     ocr = build_ocr(cfg.ocr_enabled)
     pipeline = DiagnosisPipeline(cfg, ocr, ollama if cfg.vision_enabled else None, kb)
-    return {"kb": kb, "ocr": ocr, "ollama": ollama, "pipeline": pipeline}
+    llm = (
+        OpenAIChat(cfg.llm_base_url, cfg.llm_api_key, cfg.llm_model, cfg.llm_timeout_s)
+        if cfg.llm_provider == "openai"
+        else OllamaChat(cfg.ollama_url, cfg.llm_model, cfg.llm_timeout_s)
+    )
+    agent = DiagnosisAgent(cfg, llm, pipeline, kb)
+    return {"kb": kb, "ocr": ocr, "ollama": ollama, "pipeline": pipeline, "agent": agent}
 
 
 @asynccontextmanager
@@ -70,6 +78,18 @@ async def diagnose(
         result = await run_in_threadpool(app.state.svc["pipeline"].run, raw, node_id, note)
     except InvalidImageError as exc:
         raise HTTPException(400, str(exc)) from exc
+    return result.to_dict()
+
+
+@app.post("/agent/diagnose", dependencies=[Depends(require_key)])
+async def agent_diagnose(
+    file: UploadFile | None = File(None),
+    node_id: str = Form(""),
+    note: str = Form(""),
+) -> dict:
+    """Agent tự chọn công cụ để chẩn đoán; ảnh là tùy chọn. Trả kết luận + `trace` từng bước."""
+    raw = await file.read() if file else None
+    result = await run_in_threadpool(app.state.svc["agent"].run, raw, node_id, note)
     return result.to_dict()
 
 

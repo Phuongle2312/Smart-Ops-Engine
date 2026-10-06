@@ -52,6 +52,14 @@ export const api = {
     if (note) form.append('note', note);
     return upload('/diagnose', form);
   },
+  // AI agent: chạy đồng bộ (có thể mất vài chục giây), trả kết luận + trace từng bước; ảnh tùy chọn
+  agentDiagnose: (file, nodeId, note) => {
+    const form = new FormData();
+    if (file) form.append('file', file);
+    form.append('nodeId', nodeId);
+    if (note) form.append('note', note);
+    return upload('/agent/diagnose', form);
+  },
   sendAiFeedback: (incidentId, data) => request('POST', `/incidents/${incidentId}/ai-feedback`, data),
   getOwners: (nodeId) => request('GET', `/nodes/${nodeId}/owners`),
   addOwner: (nodeId, data) => request('POST', `/nodes/${nodeId}/owners`, data),

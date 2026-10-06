@@ -18,6 +18,7 @@ Smart-Ops-Engine/
 ├── docs/
 │   ├── legacy-v1/     # Đặc tả (SRS) + test case của backend hiện tại
 │   ├── ai-diagnosis/  # Đặc tả chức năng chẩn đoán lỗi bằng ảnh
+│   ├── ai-agent/      # Nguyên lý AI Agent + kịch bản demo
 │   └── archive-v3/    # Bộ đặc tả .NET microservices — đã lưu trữ, không còn là đích đến
 ├── deploy/docker/     # Docker Compose: Ollama + Qdrant cho dịch vụ AI
 └── tools/scripts/     # test-all.ps1
@@ -50,4 +51,5 @@ Biến môi trường backend: xem `apps/backend/.env.example`.
 ## Tài liệu
 
 1. [CLAUDE.md](CLAUDE.md) — quy ước làm việc trong repo
-2. [docs/legacy-v1/SRS/README.md](docs/legacy-v1/SRS/README.md) — feature matrix backend hiện tại
+2. [docs/ai-agent/README.md](docs/ai-agent/README.md) — nguyên lý AI Agent và kịch bản demo
+3. [docs/legacy-v1/SRS/README.md](docs/legacy-v1/SRS/README.md) — feature matrix backend hiện tại

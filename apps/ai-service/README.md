@@ -53,6 +53,32 @@ Cấu hình qua biến môi trường `AI_*` — xem `.env.example`.
 curl -F "file=@loi.png" -F "node_id=srv-01" http://localhost:8001/diagnose
 ```
 
+## AI Agent (`POST /agent/diagnose`)
+
+Khác `/diagnose` (luồng cố định), agent để **LLM tự quyết định** gọi công cụ nào và khi nào kết luận (`app/agent.py`).
+
+```
+mục tiêu → LLM chọn công cụ → chạy → kết quả đưa lại LLM → ... → finish
+```
+
+| Công cụ | Việc làm |
+|---|---|
+| `analyze_image` | chạy pipeline OCR + luật + vision trên ảnh đính kèm |
+| `get_node_metrics` | đọc CPU/RAM/Disk thật từ backend Java (`AI_BACKEND_URL`) |
+| `search_runbook` / `get_runbook` | RAG / runbook theo mã |
+| `finish` | kết luận: mã lỗi, độ tin cậy, tóm tắt, các bước gợi ý |
+
+Mọi công cụ chỉ **đọc**; agent không thực thi lệnh sửa lỗi. Giới hạn `AI_AGENT_MAX_STEPS` (mặc định 6); hết bước mà chưa
+`finish` thì dùng kết quả `analyze_image` và cảnh báo rõ. Phản hồi có `trace` ghi từng bước (công cụ, tham số, kết quả) để demo/giải thích.
+
+Nhà cung cấp LLM (`AI_LLM_PROVIDER`): `ollama` (nội bộ, mô hình có tool calling như `qwen2.5:7b`) hoặc `openai`
+(API tương thích OpenAI: ChatGPT, hoặc Gemini qua `AI_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`).
+Xem `.env.example`.
+
+```bash
+curl -F "file=@loi.png" -F "node_id=1" http://localhost:8001/agent/diagnose
+```
+
 ## Thêm tri thức
 
 - Loại lỗi mới: thêm vào `app/taxonomy.py`, mẫu luật vào `app/rules.py`, runbook `data/knowledge/<MÃ>.md`

@@ -6,11 +6,15 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app import main
+from app.agent import DiagnosisAgent
+from app.llm import LLMReply, ToolCall
 from app.config import Settings, get_settings
 from app.knowledge import KeywordRetriever, KnowledgeBase
 from app.ocr import NullOcr
 from app.pipeline import DiagnosisPipeline
 from app.vision import VisionResult
+
+from tests.test_agent import ScriptedLLM  # noqa: E402
 
 H = {"X-API-Key": "secret"}
 
@@ -39,6 +43,10 @@ def client(tmp_path):
     main.app.state.svc = {
         "kb": kb, "ocr": NullOcr(), "ollama": vision,
         "pipeline": DiagnosisPipeline(cfg, NullOcr(), vision, kb),
+        "agent": DiagnosisAgent(cfg, ScriptedLLM([
+            LLMReply("", [ToolCall("1", "analyze_image", {})]),
+            LLMReply("", [ToolCall("2", "finish", {"error_code": "GPU_XID_ERROR", "confidence": 0.9, "summary": "ok"})]),
+        ]), DiagnosisPipeline(cfg, NullOcr(), vision, kb), kb),
     }
     main.app.dependency_overrides[get_settings] = lambda: cfg
     with TestClient(main.app) as c:
@@ -108,3 +116,12 @@ def test_feedback_recorded(client):
 def test_reindex(client):
     c, _ = client
     assert c.post("/knowledge/reindex", headers=H).json()["runbooks"] == 11
+
+
+def test_agent_endpoint(client):
+    c, _ = client
+    assert c.post("/agent/diagnose", files={"file": ("a.png", png(), "image/png")}).status_code == 401
+    r = c.post("/agent/diagnose", headers=H, data={"node_id": "1"}, files={"file": ("a.png", png(), "image/png")})
+    body = r.json()
+    assert r.status_code == 200 and body["status"] == "finished" and body["error_code"] == "GPU_XID_ERROR"
+    assert [s["tool"] for s in body["trace"]] == ["analyze_image", "finish"]

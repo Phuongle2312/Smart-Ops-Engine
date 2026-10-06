@@ -66,6 +66,37 @@ public class AiDiagnosisClient {
         }
     }
 
+    /**
+     * Chạy AI agent (POST /agent/diagnose). Ảnh tùy chọn; trả nguyên JSON của ai-service
+     * (kết luận + trace từng bước) để giao diện hiển thị. Gọi đồng bộ, có thể mất vài chục giây.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> agentDiagnose(byte[] image, String filename, String nodeId, String note) {
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        if (image != null && image.length > 0) {
+            body.add("file", namedResource(image, filename));
+        }
+        body.add("node_id", nodeId == null ? "" : nodeId);
+        body.add("note", note == null ? "" : note);
+        try {
+            Map<String, Object> result = client.post().uri("/agent/diagnose")
+                    .headers(this::addKey)
+                    .contentType(MediaType.MULTIPART_FORM_DATA)
+                    .body(body)
+                    .retrieve()
+                    .body(Map.class);
+            if (result == null || result.get("error_code") == null) {
+                throw new AiServiceException("ai-service trả phản hồi rỗng", 0, null);
+            }
+            return result;
+        } catch (RestClientResponseException e) {
+            throw new AiServiceException("ai-service từ chối (HTTP " + e.getStatusCode().value() + "): "
+                    + e.getResponseBodyAsString(), e.getStatusCode().value(), e);
+        } catch (RestClientException e) {
+            throw new AiServiceException("Không gọi được ai-service: " + e.getMessage(), 0, e);
+        }
+    }
+
     public void sendFeedback(String diagnosisId, boolean correct, String correctCode, String comment) {
         try {
             client.post().uri("/feedback")

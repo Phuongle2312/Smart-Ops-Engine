@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { UploadCloud, X, ScanSearch, ThumbsUp, ThumbsDown, Info, CheckCircle2 } from 'lucide-react';
+import { UploadCloud, X, ScanSearch, ThumbsUp, ThumbsDown, Info, CheckCircle2, Bot, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { AppContext } from '../context/AppContext';
 import { usePreferences } from '../context/PreferencesContext';
@@ -84,6 +84,69 @@ const FeedbackBar = ({ incident, sent, onSent }) => {
   );
 };
 
+// Kết quả AI agent: kết luận + từng bước (công cụ, tham số, kết quả) để người dùng thấy agent đã làm gì
+const AgentResultCard = ({ result }) => {
+  const { t } = usePreferences();
+  const toolLabel = (name) => {
+    const label = t(`diagnosis.agentTool.${name}`);
+    return label.startsWith('diagnosis.') ? name : label;
+  };
+  const statusLabel = t(`diagnosis.agentStatus.${result.status}`);
+
+  return (
+    <div className="glass p-5 rounded-2xl space-y-4">
+      <h3 className="text-sm font-semibold text-slate-100 font-heading flex items-center gap-1.5">
+        <Bot className="w-4 h-4 text-indigo-400" />
+        <span>{t('diagnosis.agentResultTitle')}</span>
+        <span className="ml-auto text-[11px] font-mono text-slate-500">{result.llm}</span>
+      </h3>
+
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <IncidentTypeChip type={result.error_code} />
+        <SeverityBadge type={result.error_code} />
+        <AiConfidenceChip confidence={result.confidence} />
+        <span className="text-xs text-slate-400">{statusLabel}</span>
+      </div>
+
+      <p className="text-sm text-slate-300 whitespace-pre-wrap">{result.summary}</p>
+
+      {result.recommended_steps?.length > 0 && (
+        <div>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">{t('diagnosis.agentStepsTitle')}</p>
+          <ol className="list-decimal list-inside space-y-1 text-xs text-emerald-400 font-medium">
+            {result.recommended_steps.map((step, i) => <li key={i}>{step}</li>)}
+          </ol>
+        </div>
+      )}
+
+      {result.warnings?.length > 0 && (
+        <ul className="text-xs text-amber-500 space-y-0.5">
+          {result.warnings.map((w, i) => <li key={i}>⚠ {w}</li>)}
+        </ul>
+      )}
+
+      <div>
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('diagnosis.agentTraceTitle')}</p>
+        <ol className="space-y-2">
+          {result.trace.map((step, i) => (
+            <li key={i} className="p-3 rounded-xl border border-slate-800/70 bg-slate-900/20 text-xs space-y-1">
+              <div className="flex items-center gap-2 font-semibold text-slate-200">
+                <Wrench className="w-3.5 h-3.5 text-indigo-400" />
+                <span>{i + 1}. {toolLabel(step.tool)}</span>
+                <code className="text-[11px] text-slate-500 font-mono">{step.tool}</code>
+              </div>
+              {Object.keys(step.args || {}).length > 0 && (
+                <p className="font-mono text-[11px] text-slate-400 break-all">{JSON.stringify(step.args)}</p>
+              )}
+              <p className="font-mono text-[11px] text-slate-500 break-all whitespace-pre-wrap">{step.result}</p>
+            </li>
+          ))}
+        </ol>
+      </div>
+    </div>
+  );
+};
+
 const Diagnosis = () => {
   const { user, nodes, incidents } = useContext(AppContext);
   const { t, formatDateTime } = usePreferences();
@@ -94,6 +157,8 @@ const Diagnosis = () => {
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [agentMode, setAgentMode] = useState(false);
+  const [agentResult, setAgentResult] = useState(null);
   const [feedbackSent, setFeedbackSent] = useState(() => new Set());
   const inputRef = useRef(null);
 
@@ -128,10 +193,17 @@ const Diagnosis = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return toast.error(t('diagnosis.errNoFile'));
+    if (agentMode ? !file && !note.trim() : !file) {
+      return toast.error(agentMode ? t('diagnosis.agentNeedInput') : t('diagnosis.errNoFile'));
+    }
     if (!nodeId) return toast.error(t('diagnosis.errNoNode'));
     setSubmitting(true);
     try {
+      if (agentMode) {
+        setAgentResult(null);
+        setAgentResult(await api.agentDiagnose(file, nodeId, note.trim()));
+        return;
+      }
       await api.diagnoseImage(file, nodeId, note.trim());
       toast.success(t('diagnosis.submitted'), { duration: 6000 });
       setFile(null);
@@ -228,17 +300,31 @@ const Diagnosis = () => {
                 className="w-full px-3.5 py-2.5 rounded-xl bg-slate-900/60 border border-slate-700/50 text-sm text-slate-100 placeholder-slate-500 focus:border-indigo-500 focus:outline-none resize-none"
               />
             </div>
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={agentMode}
+                onChange={(e) => { setAgentMode(e.target.checked); setAgentResult(null); }}
+                className="mt-0.5 accent-indigo-500"
+              />
+              <span className="text-xs text-slate-400 leading-relaxed">
+                <span className="font-semibold text-slate-200 inline-flex items-center gap-1"><Bot className="w-3.5 h-3.5 text-indigo-400" />{t('diagnosis.agentMode')}</span>
+                <br />{t('diagnosis.agentHint')}
+              </span>
+            </label>
             <button
               type="submit"
               disabled={submitting}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold disabled:opacity-50 cursor-pointer active:scale-95 transition-all"
             >
               <ScanSearch className="w-4 h-4" />
-              <span>{submitting ? t('diagnosis.submitting') : t('diagnosis.submit')}</span>
+              <span>{submitting ? t(agentMode ? 'diagnosis.agentRunning' : 'diagnosis.submitting') : t(agentMode ? 'diagnosis.agentSubmit' : 'diagnosis.submit')}</span>
             </button>
           </div>
         </div>
       </form>
+
+      {agentResult && <AgentResultCard result={agentResult} />}
 
       {/* Kết quả gần đây */}
       <div className="glass p-5 rounded-2xl">

@@ -65,6 +65,48 @@ public class DiagnosisController {
                 "message", "Đang phân tích. Kết quả sẽ có ở danh sách sự cố và email người phụ trách."));
     }
 
+    /**
+     * Chạy AI agent chẩn đoán, trả kết luận kèm trace từng bước (đồng bộ). Chỉ gợi ý để người dùng xem —
+     * không tạo incident / gửi email. Cần ảnh hoặc ghi chú.
+     */
+    @PostMapping(value = "/agent/diagnose", consumes = "multipart/form-data")
+    public ResponseEntity<Map<String, Object>> agentDiagnose(
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestParam("nodeId") Long nodeId,
+            @RequestParam(value = "note", required = false) String note) throws IOException {
+        if (!aiProperties.isEnabled()) {
+            return agentError(HttpStatus.SERVICE_UNAVAILABLE, "Chức năng chẩn đoán đang tắt");
+        }
+        boolean hasImage = file != null && !file.isEmpty();
+        if (!hasImage && (note == null || note.isBlank())) {
+            return agentError(HttpStatus.BAD_REQUEST, "Cần ảnh hoặc ghi chú để agent chẩn đoán");
+        }
+        if (hasImage) {
+            if (file.getSize() > MAX_BYTES) {
+                return agentError(HttpStatus.BAD_REQUEST, "Ảnh vượt quá 10 MB");
+            }
+            String contentType = file.getContentType();
+            if (contentType == null || !ALLOWED_TYPES.contains(contentType)) {
+                return agentError(HttpStatus.BAD_REQUEST, "Chỉ nhận ảnh PNG, JPEG hoặc WEBP");
+            }
+        }
+        if (!nodeRepository.existsById(nodeId)) {
+            return agentError(HttpStatus.NOT_FOUND, "Không tìm thấy node " + nodeId);
+        }
+        try {
+            return ResponseEntity.ok(aiClient.agentDiagnose(
+                    hasImage ? file.getBytes() : null, hasImage ? file.getOriginalFilename() : null,
+                    String.valueOf(nodeId), note));
+        } catch (AiServiceException e) {
+            HttpStatus status = e.isClientError() ? HttpStatus.BAD_REQUEST : HttpStatus.BAD_GATEWAY;
+            return agentError(status, e.getMessage());
+        }
+    }
+
+    private static ResponseEntity<Map<String, Object>> agentError(HttpStatus status, String message) {
+        return ResponseEntity.status(status).body(Map.of("error", message));
+    }
+
     public record AiFeedbackRequest(boolean correct, String correctCode, String comment) {}
 
     /** Người xử lý xác nhận chẩn đoán AI đúng/sai — dữ liệu này dùng để cải thiện nhận diện. */

@@ -120,4 +120,33 @@ class DiagnosisControllerTest {
                         .content("{\"correct\":true}"))
                 .andExpect(status().isBadGateway());
     }
+
+    @Test
+    void agent_returnsResultWithTrace() throws Exception {
+        when(nodeRepository.existsById(7L)).thenReturn(true);
+        when(aiClient.agentDiagnose(any(byte[].class), eq("loi.png"), eq("7"), eq("n")))
+                .thenReturn(java.util.Map.of("error_code", "GPU_XID_ERROR", "status", "finished",
+                        "trace", java.util.List.of(java.util.Map.of("tool", "analyze_image"))));
+
+        mvc.perform(multipart("/api/agent/diagnose").file(png()).param("nodeId", "7").param("note", "n"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.error_code").value("GPU_XID_ERROR"))
+                .andExpect(jsonPath("$.trace[0].tool").value("analyze_image"));
+        verifyNoInteractions(diagnosisService);
+    }
+
+    @Test
+    void agent_withoutImageAndNote_returns400() throws Exception {
+        mvc.perform(multipart("/api/agent/diagnose").param("nodeId", "7"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void agent_aiServiceDown_returns502() throws Exception {
+        when(nodeRepository.existsById(7L)).thenReturn(true);
+        when(aiClient.agentDiagnose(any(), any(), any(), any())).thenThrow(new AiServiceException("down", 0, null));
+
+        mvc.perform(multipart("/api/agent/diagnose").param("nodeId", "7").param("note", "n"))
+                .andExpect(status().isBadGateway());
+    }
 }

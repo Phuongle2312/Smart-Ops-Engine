@@ -25,6 +25,16 @@ class Settings(BaseSettings):
     # không bao giờ đạt ngưỡng auto_notify (0.85) — cần luật OCR đồng thuận.
     vision_weight: float = 0.8
 
+    # Agent (tool calling). llm_provider: ollama | openai. "openai" dùng cho ChatGPT hoặc Gemini
+    # (Gemini: llm_base_url = https://generativelanguage.googleapis.com/v1beta/openai).
+    llm_provider: str = "ollama"
+    llm_model: str = "qwen2.5:7b"
+    llm_base_url: str = "https://api.openai.com/v1"
+    llm_api_key: str = ""
+    llm_timeout_s: float = 120.0
+    agent_max_steps: int = 6
+    backend_url: str = ""  # ví dụ http://localhost:8080 — để agent đọc metrics thật
+
     qdrant_url: str = ""  # để trống = tìm kiếm theo từ khóa, không dùng vector
     qdrant_collection: str = "soe_knowledge"
 
