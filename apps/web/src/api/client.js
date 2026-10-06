@@ -18,6 +18,20 @@ async function request(method, path, body) {
   return res.status === 204 ? null : res.json();
 }
 
+// Gửi multipart (ảnh) — không tự đặt Content-Type để trình duyệt tự thêm boundary
+async function upload(path, formData) {
+  const res = await fetch(`${BASE}/api${path}`, { method: 'POST', body: formData });
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      msg = data.message || data.error || msg;
+    } catch { /* body rỗng */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export const api = {
   getNodes: () => request('GET', '/nodes'),
   createNode: (data) => request('POST', '/nodes', data),
@@ -30,4 +44,16 @@ export const api = {
   getIncidents: () => request('GET', '/incidents'),
   resolveIncident: (id, resolutionAction) => request('PUT', `/incidents/${id}/resolve`, { resolutionAction }),
   acknowledgeIncident: (id) => request('PUT', `/incidents/${id}/acknowledge`),
+  // Chẩn đoán lỗi từ ảnh (AI) — trả 202, kết quả xuất hiện ở danh sách sự cố
+  diagnoseImage: (file, nodeId, note) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('nodeId', nodeId);
+    if (note) form.append('note', note);
+    return upload('/diagnose', form);
+  },
+  sendAiFeedback: (incidentId, data) => request('POST', `/incidents/${incidentId}/ai-feedback`, data),
+  getOwners: (nodeId) => request('GET', `/nodes/${nodeId}/owners`),
+  addOwner: (nodeId, data) => request('POST', `/nodes/${nodeId}/owners`, data),
+  deleteOwner: (ownerId) => request('DELETE', `/owners/${ownerId}`),
 };

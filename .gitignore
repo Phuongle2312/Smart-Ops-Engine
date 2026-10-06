@@ -1,4 +1,4 @@
-# Compiled class file
+﻿# Compiled class file
 *.class
 
 # Log files
@@ -51,24 +51,25 @@ buildNumber.properties
 Thumbs.db
 Desktop.ini
 
-# .NET (backend-v3)
-bin/
-obj/
-*.user
-*.suo
-.vs/
-artifacts/
-TestResults/
-*.trx
-coverage*.xml
-
 # Node
 node_modules/
 dist/
 
 # Environment secrets — không commit credential thật
 .env
-apps/legacy-v1/.env
+apps/backend/.env
 deploy/docker/.env
-*.pem
-jwt-private*.key
+# Dữ liệu AI (ảnh lỗi lớn, vector store, model cache)
+data/error-images/**/*.png
+data/error-images/**/*.jpg
+data/error-images/**/*.jpeg
+data/error-images/**/*.webp
+__pycache__/
+.venv/
+*.pyc
+
+
+# ai-service
+data/feedback/
+apps/ai-service/.env
+.pytest_cache/

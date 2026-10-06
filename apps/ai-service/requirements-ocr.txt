@@ -1,0 +1,2 @@
+# OCR là tùy chọn (cần Python 3.8–3.12 vì onnxruntime). Không cài thì service chỉ dùng vision LLM.
+rapidocr-onnxruntime>=1.3

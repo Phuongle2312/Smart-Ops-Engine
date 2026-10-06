@@ -18,6 +18,7 @@ const Incidents = lazy(() => import('./views/Incidents'));
 const AlertChannels = lazy(() => import('./views/AlertChannels'));
 const AuditLogs = lazy(() => import('./views/AuditLogs'));
 const SystemConfig = lazy(() => import('./views/SystemConfig'));
+const Diagnosis = lazy(() => import('./views/Diagnosis'));
 
 // Fallback Page Loader Component
 const PageLoader = () => {
@@ -76,6 +77,7 @@ const AppLayout = () => {
               <Route path="nodes" element={<Nodes />} />
               <Route path="nodes/:id" element={<NodeDetail />} />
               <Route path="incidents" element={<Incidents />} />
+              <Route path="diagnosis" element={<Diagnosis />} />
               <Route path="alert-channels" element={<AlertChannels />} />
               <Route path="audit-logs" element={<AuditLogs />} />
               <Route path="system-config" element={<SystemConfig />} />

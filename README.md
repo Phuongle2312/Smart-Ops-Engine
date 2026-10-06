@@ -1,54 +1,53 @@
 # Smart Ops Engine
 
-Hệ thống giám sát sức khỏe máy chủ (CPU / RAM / Disk qua SSH), phát hiện sự cố và cảnh báo đa kênh.
-
-Repo đang trong giai đoạn **chuyển từ v1 (Spring Boot monolith) sang v3 (.NET 8 microservices)**.
+Hệ thống giám sát sức khỏe máy chủ (CPU / RAM / Disk qua SSH), phát hiện sự cố và cảnh báo qua email.
+Đang bổ sung **chẩn đoán lỗi từ ảnh (RAM / CPU / GPU) bằng AI chạy nội bộ** — chỉ gợi ý và thông báo
+cho người phụ trách, việc xử lý do người quản lý thiết bị làm trực tiếp tại máy.
 
 ## Bản đồ thư mục
 
 ```
 Smart-Ops-Engine/
-├── apps/                      # Mã nguồn sản phẩm
-│   ├── backend-v3/            # ⭐ .NET 8 microservices — hệ thống đang xây (mốc M1)
-│   ├── web/                   # React 19 + Vite + Tailwind — giao diện người dùng
-│   └── legacy-v1/             # Spring Boot 3.2.4 — bản v1, đóng băng, chỉ sửa lỗi
-├── docs/                      # ⭐ Đặc tả v3: kiến trúc, SRS, use case, test case, ma trận truy vết
-│   └── legacy-v1/             # Tài liệu v1 cũ (SRS + test_cases) — chỉ để tham chiếu
-├── deploy/                    # Docker Compose (dev) và Kubernetes (staging/production)
-├── tools/                     # Script phát triển, kịch bản k6, script SQL vận hành
-└── .github/workflows/         # CI/CD
+├── apps/
+│   ├── backend/       # Spring Boot 3.2.4, Java 17 — lõi nghiệp vụ (node, health check, incident, email)
+│   ├── ai-service/    # Python FastAPI — OCR, vision LLM, RAG; chạy mô hình nội bộ
+│   └── web/           # React 19 + Vite + Tailwind — giao diện người dùng
+├── data/
+│   ├── error-images/  # Thư viện ảnh lỗi theo ram/ cpu/ gpu/ + manifest.csv (ảnh không commit)
+│   └── knowledge/     # Runbook / tài liệu nội bộ cho RAG
+├── docs/
+│   ├── legacy-v1/     # Đặc tả (SRS) + test case của backend hiện tại
+│   ├── ai-diagnosis/  # Đặc tả chức năng chẩn đoán lỗi bằng ảnh
+│   └── archive-v3/    # Bộ đặc tả .NET microservices — đã lưu trữ, không còn là đích đến
+├── deploy/docker/     # Docker Compose: Ollama + Qdrant cho dịch vụ AI
+└── tools/scripts/     # test-all.ps1
 ```
 
-Ai làm phần nào, thứ tự triển khai: [docs/06_workplan.md](docs/06_workplan.md).
-Chạy thử từng phần và ghi kết quả: [docs/07_huong_dan_chay_thu.md](docs/07_huong_dan_chay_thu.md).
+Mã nguồn .NET (v3) đã được gỡ khỏi nhánh chính, lấy lại bằng: `git checkout archive/backend-v3`.
 
 ## Bắt đầu nhanh
 
 | Việc | Lệnh |
 |---|---|
-| **Chạy toàn bộ kiểm thử** | `.\tools\scripts\test-all.ps1` (thêm `-Smoke` để kiểm thử API thật) |
-| Build & test backend v3 | `dotnet test apps/backend-v3/SmartOpsEngine.sln` |
-| Chạy Identity (v3) | `dotnet run --project apps/backend-v3/src/Services/Identity/SOE.Identity.Api --urls http://localhost:5001` |
-| Chạy Gateway (v3) | `dotnet run --project apps/backend-v3/src/Gateway/SOE.Gateway --urls http://localhost:8080` |
+| Chạy toàn bộ kiểm thử | `.\tools\scripts\test-all.ps1` |
+| Chạy backend | `cd apps/backend && .\mvnw.cmd spring-boot:run` |
 | Chạy giao diện | `cd apps/web && npm install && npm run dev` |
-| Dựng môi trường Docker | `docker compose -f deploy/docker/docker-compose.yml up -d --build` |
-| Chạy backend v1 | `cd apps/legacy-v1 && ./mvnw.cmd spring-boot:run` |
+| Dựng hạ tầng AI (Ollama + Qdrant) | `docker compose -f deploy/docker/docker-compose.yml up -d` |
+
+Biến môi trường backend: xem `apps/backend/.env.example`.
 
 ## Trạng thái
 
 | Phần | Trạng thái |
 |---|---|
-| Tài liệu đặc tả v3 | ✅ Hoàn chỉnh — 44 tài liệu, ~210 yêu cầu chức năng, 28 use case, ~330 test case |
-| `apps/backend-v3` | 🟡 M1 xong: BuildingBlocks + Gateway + Identity (49 test xanh); M2–M5 chưa bắt đầu |
-| `apps/web` | 🟡 Đủ 8 màn hình, lint sạch, nhưng còn chạy **mock** — chưa nối API thật |
-| `apps/legacy-v1` | 🟢 Đang chạy được (6 test xanh), không phát triển thêm |
-| `deploy` | 🟡 Có Docker Compose cho M1; Kubernetes chưa làm |
+| `apps/backend` | 🟢 Chạy được (6 test xanh) |
+| `apps/web` | 🟡 9 màn hình; nodes/sự cố/chẩn đoán ảnh gọi API thật, auth + kênh thông báo + audit log còn mock |
+| `apps/ai-service` | 🟡 Chạy được, 33 test xanh; chưa thử với Ollama thật |
+| Java ↔ ai-service | 🟡 Backend gọi `/diagnose`, tạo incident, gửi email (25 test xanh, đã thử qua HTTP thật với ai-service); UI đã có (trang Chẩn đoán ảnh + người phụ trách), đã chạy thử toàn luồng trên trình duyệt; chưa thử gửi SMTP thật |
+| `data/` | 🟡 Có 11 runbook; thư viện ảnh còn trống |
 | CI/CD | 🔴 Chưa có |
 
-## Tài liệu nên đọc trước khi code
+## Tài liệu
 
-1. [docs/README.md](docs/README.md) — mục lục và quy ước định danh
-2. [docs/01_architecture/system_architecture.md](docs/01_architecture/system_architecture.md) — bức tranh tổng thể
-3. [docs/01_architecture/solid_clean_architecture.md](docs/01_architecture/solid_clean_architecture.md) — khuôn hình mã nguồn bắt buộc
-4. SRS của service mình phụ trách trong [docs/02_srs/](docs/02_srs/README.md)
-5. [CLAUDE.md](CLAUDE.md) — quy ước làm việc trong repo
+1. [CLAUDE.md](CLAUDE.md) — quy ước làm việc trong repo
+2. [docs/legacy-v1/SRS/README.md](docs/legacy-v1/SRS/README.md) — feature matrix backend hiện tại

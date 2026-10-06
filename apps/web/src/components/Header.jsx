@@ -15,6 +15,7 @@ const PAGE_TITLES = [
   ['/nodes/', 'nodeDetail'],
   ['/nodes', 'nodes'],
   ['/incidents', 'incidents'],
+  ['/diagnosis', 'diagnosis'],
   ['/alert-channels', 'alertChannels'],
   ['/audit-logs', 'auditLogs'],
   ['/system-config', 'systemConfig'],

@@ -10,7 +10,8 @@ import {
   FileText,
   User,
   Shield,
-  Settings
+  Settings,
+  ScanSearch
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -24,6 +25,7 @@ const Sidebar = () => {
     { key: 'dashboard', path: '/app/dashboard', icon: LayoutDashboard, role: 'ALL' },
     { key: 'nodes', path: '/app/nodes', icon: Server, role: 'ALL' },
     { key: 'incidents', path: '/app/incidents', icon: AlertTriangle, role: 'ALL' },
+    { key: 'diagnosis', path: '/app/diagnosis', icon: ScanSearch, role: 'ALL' },
     { key: 'alertChannels', path: '/app/alert-channels', icon: BellRing, role: 'ADMIN' },
     { key: 'auditLogs', path: '/app/audit-logs', icon: FileText, role: 'ADMIN' },
     { key: 'systemConfig', path: '/app/system-config', icon: Settings, role: 'ADMIN' },

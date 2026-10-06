@@ -1,4 +1,4 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 Hướng dẫn cho Claude Code khi làm việc trên repo này.
 
@@ -7,13 +7,15 @@ Hướng dẫn cho Claude Code khi làm việc trên repo này.
 **Smart Ops Engine** — hệ thống giám sát sức khỏe máy chủ (health check CPU/RAM/Disk qua SSH) và cảnh báo sự cố tự động qua email.
 
 Monorepo gồm 3 phần:
-- `apps/legacy-v1/` — Spring Boot 3.2.4, Java 17 (REST API + scheduler) — **bản v1 đang chạy**
-- `apps/backend-v3/` — .NET 8 microservices (Gateway YARP + Identity…) — **bản build lại, đang ở mốc M1**
+- `apps/backend/` — Spring Boot 3.2.4, Java 17 (REST API + scheduler) — **lõi nghiệp vụ duy nhất**
+- `apps/ai-service/` — Python FastAPI (OCR + vision LLM + RAG, chạy mô hình nội bộ trên CPU) — Java gọi qua REST (`com.soe.ai`); chạy/test: xem `apps/ai-service/README.md`
 - `apps/web/` — React 19, Vite 8, Tailwind CSS 4
+
+Chức năng AI: ảnh lỗi RAM/CPU/GPU → nhận diện → incident → email người phụ trách kèm hướng xử lý (RAG). **Chỉ gợi ý và thông báo, không tự thực thi lệnh sửa lỗi.** Ảnh mẫu ở `data/error-images/`, runbook cho RAG ở `data/knowledge/`.
 
 ## Lệnh build / run / test
 
-**Backend** (chạy trong thư mục `apps/legacy-v1/`, Maven wrapper cho Windows):
+**Backend** (chạy trong thư mục `apps/backend/`, Maven wrapper cho Windows):
 
 ```powershell
 .\mvnw.cmd clean install      # build
@@ -21,26 +23,10 @@ Monorepo gồm 3 phần:
 .\mvnw.cmd test                # chạy test (JUnit 5 + Mockito)
 ```
 
-**Backend v3** (.NET 8, chạy trong thư mục `apps/backend-v3/`):
-
-```powershell
-dotnet build SmartOpsEngine.sln        # build toàn bộ solution
-dotnet test SmartOpsEngine.sln         # unit test + architecture test
-dotnet run --project src\Services\Identity\SOE.Identity.Api --urls http://localhost:5001
-dotnet run --project src\Gateway\SOE.Gateway --urls http://localhost:8080
-```
-
-Chuỗi kết nối và secret truyền qua biến môi trường (`ConnectionStrings__Default`, `Jwt__PrivateKeyPem`,
-`Identity__InitialAdminPassword`) — không commit vào repo. Migration: `dotnet ef migrations add <Tên>
---project src\Services\Identity\SOE.Identity.Infrastructure --startup-project src\Services\Identity\SOE.Identity.Api
---output-dir Persistence\Migrations`.
-
 **Chạy toàn bộ kiểm thử** (từ gốc repo, PowerShell):
 
 ```powershell
-.\tools\scripts\test-all.ps1                      # backend-v3 test + web lint/build + legacy-v1 test
-.\tools\scripts\test-all.ps1 -Smoke -ConnectionString '<chuỗi kết nối>'   # kèm smoke test API Identity + Gateway
-.\tools\scripts\smoke-m1.ps1 -AdminPassword '<mật khẩu>'   # chỉ smoke test, service đã chạy sẵn
+.\tools\scripts\test-all.ps1                      # web lint/build + backend test
 ```
 
 **Frontend** (chạy trong thư mục `apps/web/`):
@@ -61,6 +47,7 @@ npm run preview   # preview bản build
 | `service` | `NodeMetricsService` (điều phối local vs remote), `SshService` (jsch exec), `LocalMetricsService` (MX beans cho localhost), `OutlookAlertService` (SMTP email) |
 | `entity` | `Node`, `NodeMetric`, `IncidentLog` (JPA) |
 | `repository` | Spring Data JPA interfaces |
+| `ai` | Chẩn đoán lỗi từ ảnh: `AiDiagnosisClient` (REST → ai-service), `DiagnosisService` (@Async: ảnh → `IncidentLog` → email người phụ trách), `DiagnosisEmailTemplate` (escape HTML). API: `POST /api/diagnose` (202), `POST /api/incidents/{id}/ai-feedback`, `/api/nodes/{id}/owners` (`NodeOwner`). Cấu hình `smartops.ai.*` |
 | `converter` + `util` | `CryptoConverter` (JPA AttributeConverter) + `AesEncryptionUtil` — mã hóa `password`/`sshKey` khi lưu |
 
 Cần biết:
@@ -70,34 +57,33 @@ Cần biết:
 
 ## Kiến trúc frontend
 
-- `src/views/` — 8 view: `Login`, `Dashboard`, `Nodes`, `NodeDetail`, `Incidents`, `AlertChannels`, `AuditLogs`, `SystemConfig`
-- `src/components/` — `Header`, `Sidebar`, `PrivateRoute`
+- `src/views/` — 9 view: `Login`, `Dashboard`, `Nodes`, `NodeDetail`, `Incidents`, `Diagnosis` (upload ảnh lỗi → AI, phản hồi đúng/sai), `AlertChannels`, `AuditLogs`, `SystemConfig`
+- `src/components/` — `Header`, `Sidebar`, `PrivateRoute`, `OwnersPanel` (người phụ trách node, trong `NodeDetail`)
 - `src/context/AppContext.jsx` — state tập trung bằng **Context API** (không dùng Redux)
 - `src/context/PreferencesContext.jsx` — theme sáng/tối + ngôn ngữ VI/EN (`usePreferences()` → `t()`, `formatDateTime`, `formatRelative`, `chartTheme`). Từ điển ở `src/i18n/vi.js` / `en.js` — **thêm chuỗi UI mới phải thêm khóa vào cả hai file**, không hardcode text trong JSX.
 - Theme sáng hoạt động bằng cách **đảo biến màu Tailwind** (`--color-slate-*`, sắc 300/400/900/950) dưới `:root[data-theme="light"]` trong `index.css`. Tiêu đề dùng `text-slate-50` (tự đảo), chỉ giữ `text-white` cho chữ trên nền màu đặc (nút indigo/red). Màu Recharts lấy từ `chartTheme`.
 - `src/constants/incidentMeta.js` — nguồn duy nhất cho màu / mức độ loại sự cố, badge trạng thái, ngưỡng tài nguyên; hiển thị qua `components/IncidentBadges.jsx`.
-- **Trạng thái hiện tại: MOCK** — dữ liệu lưu ở `localStorage`, chưa gọi API thật. Auth giả (`admin/admin`, `viewer/viewer`); WebSocket & metrics giả lập bằng `setInterval`.
+- **Trạng thái:** nodes / incidents / metrics / chẩn đoán ảnh / người phụ trách gọi **API thật** (`src/api/client.js`, Vite proxy `/api` → `:8080`, polling 15 giây). Còn **mock** (localStorage): auth (`admin/admin`, `viewer/viewer`), kênh thông báo, audit log.
+- Chạy toàn bộ luồng AI không cần SQL Server: backend `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"` (H2) + `uvicorn app.main:app --port 8001` trong `apps/ai-service` + `npm run dev`.
 
 ## Quy ước code
 
 - Comment / label / toast viết bằng **tiếng Việt**; tên class / API / biến bằng tiếng Anh.
-- **Backend:** Lombok (`@Getter/@Setter/@Builder/@Slf4j`), logging SLF4J, test JUnit 5 + Mockito (mẫu: `apps/legacy-v1/src/test/java/com/soe/scheduler/HealthCheckSchedulerTest.java`).
+- **Backend:** Lombok (`@Getter/@Setter/@Builder/@Slf4j`), logging SLF4J, test JUnit 5 + Mockito (mẫu: `apps/backend/src/test/java/com/soe/scheduler/HealthCheckSchedulerTest.java`).
 - **Frontend:** functional components + hooks, Tailwind utility-first (không dùng component library), React Router v7.
 
 ## Cạm bẫy / lưu ý
 
 - **AES dùng ECB mode** (không IV) — không an toàn cho production; nên nâng lên AES/GCM.
 - **Nguy cơ double-encrypt:** không gọi `AesEncryptionUtil.encrypt()` thủ công trong `NodeController` vì `CryptoConverter` đã tự encrypt khi persist. Kiểm tra kỹ luồng lưu Node.
-- Secret key AES, mật khẩu DB và SMTP của v1 đọc từ **biến môi trường** (xem `apps/legacy-v1/.env.example`) — không commit giá trị thật.
-- `appsettings.Development.json` của Identity chứa mật khẩu dev mẫu (`sa`, admin) — chỉ dùng cục bộ; máy dev thường phải ghi đè `ConnectionStrings__Default` (ví dụ `Integrated Security=True`).
+- Secret key AES, mật khẩu DB và SMTP của v1 đọc từ **biến môi trường** (xem `apps/backend/.env.example`) — không commit giá trị thật.
 - Nhiều tính năng (Auth/JWT, WebSocket thật, Audit log, Metrics history) mới là **kế hoạch v2.0** — frontend đang mock, backend bổ sung dần (metrics-history là phần đang làm dở).
 
 ## Tài liệu tham chiếu
 
 - `README.md` (gốc repo) — bản đồ thư mục và lệnh chạy nhanh cho từng phần.
-- `docs/06_workplan.md` — **phân chia công việc**: hạng mục ↔ thư mục ↔ SRS ↔ test case ↔ mốc M1–M5, thứ tự phụ thuộc, định nghĩa “hoàn thành”, quy ước nhánh/commit.
-- `apps/backend-v3/src/Services/README.md` — khuôn hình bắt buộc và quy trình thêm một service mới; mỗi service có README riêng ghi phạm vi + việc cần làm + bẫy đã biết.
-- `docs/` — **bộ đặc tả v3 (.NET 8 microservices)**: kiến trúc (`01_architecture/`), SRS theo service (`02_srs/`), use case (`03_usecases/`), test case (`04_test_cases/`), ma trận truy vết (`05_traceability_matrix.md`). Đây là đích đến khi build lại; code Spring Boot hiện tại là bản v1.
+- `docs/legacy-v1/`, `docs/ai-diagnosis/`, `docs/archive-v3/` — xem `docs/README.md`. Bộ đặc tả .NET v3 đã lưu trữ ở `docs/archive-v3/` (không còn là đích đến); mã .NET lấy lại bằng `git checkout archive/backend-v3`.
 
 - `docs/legacy-v1/SRS/` — đặc tả theo 9 module, mỗi module có `be.md` / `fe.md`, kèm `README.md` (feature matrix).
 - `docs/legacy-v1/test_cases/` — 9 file test case tương ứng các module.
+

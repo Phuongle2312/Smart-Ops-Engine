@@ -2,7 +2,7 @@ import { useContext, useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 import { usePreferences } from '../context/PreferencesContext';
-import { IncidentTypeChip, StatusBadge } from '../components/IncidentBadges';
+import { IncidentTypeChip, StatusBadge, AiConfidenceChip } from '../components/IncidentBadges';
 import { resourceLevel, RESOURCE_TEXT, RESOURCE_BAR } from '../constants/incidentMeta';
 import { 
   ResponsiveContainer, 
@@ -23,6 +23,7 @@ import {
   TrendingUp 
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import OwnersPanel from '../components/OwnersPanel';
 
 const NodeDetail = () => {
   const { id } = useParams();
@@ -280,6 +281,9 @@ const NodeDetail = () => {
         </div>
       </div>
 
+      {/* Người phụ trách — nhận email chẩn đoán lỗi từ ảnh */}
+      <OwnersPanel nodeId={node.id} canEdit={isAdmin} />
+
       {/* Node incidents table history */}
       <div className="glass p-5 rounded-2xl">
         <h3 className="text-sm font-semibold text-slate-100 font-heading mb-4">
@@ -303,6 +307,7 @@ const NodeDetail = () => {
                   <tr key={inc.id} className="hover:bg-slate-900/10 text-slate-300 transition-colors">
                     <td className="py-3 px-3 min-w-[150px]">
                       <IncidentTypeChip type={inc.incidentType} />
+                      <div className="mt-1"><AiConfidenceChip confidence={inc.aiConfidence} /></div>
                     </td>
                     <td className="py-3 px-3" title={inc.issueDescription}>
                       {inc.issueDescription}

@@ -15,7 +15,34 @@ export const INCIDENT_TYPES = {
   DISK_WARNING: { severity: SEVERITY.WARNING, color: '#d97706' },
   CPU_HIGH: { severity: SEVERITY.WARNING, color: '#0d9488' },
   RAM_HIGH: { severity: SEVERITY.WARNING, color: '#2563eb' },
+  // --- Chẩn đoán từ ảnh (AI): mã khớp taxonomy của ai-service ---
+  RAM_OOM_KILLER: { severity: SEVERITY.CRITICAL, color: '#7c3aed' },
+  RAM_JAVA_HEAP: { severity: SEVERITY.WARNING, color: '#8b5cf6' },
+  RAM_SWAP_HIGH: { severity: SEVERITY.WARNING, color: '#6366f1' },
+  RAM_LEAK: { severity: SEVERITY.WARNING, color: '#a78bfa' },
+  CPU_HIGH_SUSTAINED: { severity: SEVERITY.WARNING, color: '#f97316' },
+  CPU_LOAD_AVG_HIGH: { severity: SEVERITY.WARNING, color: '#fb923c' },
+  CPU_THERMAL_THROTTLE: { severity: SEVERITY.WARNING, color: '#dc2626' },
+  GPU_CUDA_OOM: { severity: SEVERITY.CRITICAL, color: '#16a34a' },
+  GPU_OVERHEAT: { severity: SEVERITY.WARNING, color: '#ca8a04' },
+  GPU_XID_ERROR: { severity: SEVERITY.CRITICAL, color: '#0891b2' },
+  GPU_ECC_ERROR: { severity: SEVERITY.CRITICAL, color: '#0e7490' },
+  AI_UNKNOWN: { severity: SEVERITY.WARNING, color: '#94a3b8' },
+  AI_DIAGNOSIS_FAILED: { severity: SEVERITY.WARNING, color: '#64748b' },
 };
+
+// Mã lỗi AI người dùng có thể chọn khi báo "chẩn đoán sai" (khớp taxonomy ai-service)
+export const AI_ERROR_CODES = [
+  'RAM_OOM_KILLER', 'RAM_JAVA_HEAP', 'RAM_SWAP_HIGH', 'RAM_LEAK',
+  'CPU_HIGH_SUSTAINED', 'CPU_LOAD_AVG_HIGH', 'CPU_THERMAL_THROTTLE',
+  'GPU_CUDA_OOM', 'GPU_OVERHEAT', 'GPU_XID_ERROR', 'GPU_ECC_ERROR',
+];
+
+// Ngưỡng độ tin cậy — khớp SRS chẩn đoán ảnh (>= AUTO: gửi ngay; >= REVIEW: cần xác nhận)
+export const AI_CONFIDENCE_AUTO = 0.85;
+export const AI_CONFIDENCE_REVIEW = 0.6;
+
+export const isAiIncident = (inc) => Boolean(inc.diagnosisId) || String(inc.incidentType).startsWith('AI_');
 
 const FALLBACK_TYPE = { severity: SEVERITY.WARNING, color: '#64748b' };
 

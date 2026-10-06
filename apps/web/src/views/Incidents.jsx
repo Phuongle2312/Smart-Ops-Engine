@@ -2,7 +2,7 @@ import { useContext, useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AppContext } from '../context/AppContext';
 import { usePreferences } from '../context/PreferencesContext';
-import { IncidentTypeChip, SeverityBadge, StatusBadge } from '../components/IncidentBadges';
+import { IncidentTypeChip, SeverityBadge, StatusBadge, AiConfidenceChip } from '../components/IncidentBadges';
 import ResolveIncidentModal from '../components/ResolveIncidentModal';
 import { 
   Search, 
@@ -260,7 +260,10 @@ const Incidents = () => {
                       <td className="py-3.5 px-4 font-bold text-sm text-slate-100">{inc.node.name}</td>
                       <td className="py-3.5 px-4 min-w-[160px]">
                         <IncidentTypeChip type={inc.incidentType} />
-                        <div className="mt-1"><SeverityBadge type={inc.incidentType} /></div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <SeverityBadge type={inc.incidentType} />
+                          <AiConfidenceChip confidence={inc.aiConfidence} />
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 min-w-[240px] max-w-[360px] text-sm">
                         <span className="line-clamp-2 font-medium" title={inc.issueDescription}>{inc.issueDescription}</span>
