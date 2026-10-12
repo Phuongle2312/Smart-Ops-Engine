@@ -1,0 +1,29 @@
+# Cấu hình cho MÁY DEV (Core i5-11300H 4 nhân/8 luồng, 24 GB RAM, GTX 1650 không dùng được cho Ollama).
+# Ollama chạy NATIVE trên Windows (đã pull model sẵn, không phải chép model vào volume Docker);
+# Docker chỉ chạy Qdrant + ai-service. Khi lên server thật (Xeon) bỏ file này và dùng docker-compose.yml.
+#
+#   docker compose -f deploy/docker/docker-compose.yml -f deploy/docker/docker-compose.local.yml up -d --build
+name: smart-ops-engine
+
+services:
+  ollama:
+    profiles: ["ollama-container"]   # không chạy container Ollama ở máy dev
+
+  ai-service:
+    depends_on: !override [qdrant]
+    environment:
+      AI_OLLAMA_URL: http://host.docker.internal:11434
+      AI_OLLAMA_NUM_GPU: "0"          # GTX 1650 làm runner Ollama crash (CUDA error: device kernel image is invalid) — ép CPU
+      AI_VISION_MODEL: qwen2.5vl:3b    # 7B quá chậm trên CPU 4 nhân
+      AI_VISION_TIMEOUT_S: "180"
+      # Agent dùng mô hình đã có sẵn: qwen2.5vl không hỗ trợ tools gốc nên llm.py tự giả lập tool-calling bằng JSON.
+      # Muốn agent mạnh hơn: ollama pull qwen2.5:7b rồi đổi AI_LLM_MODEL.
+      AI_LLM_MODEL: qwen2.5vl:3b
+      AI_BACKEND_URL: http://host.docker.internal:8080
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"        # chừa nhân cho Ollama native + backend + web
+          memory: 3g

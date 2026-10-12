@@ -15,7 +15,11 @@ public class AesEncryptionUtil {
     @Value("${smartops.aes.secret-key}")
     public void setKey(String key) {
         if (key != null && !key.isEmpty()) {
-            KEY = key.getBytes();
+            byte[] bytes = key.getBytes();
+            if (bytes.length != 16 && bytes.length != 24 && bytes.length != 32) {
+                throw new IllegalStateException("smartops.aes.secret-key phải dài 16, 24 hoặc 32 byte (khuyến nghị 32)");
+            }
+            KEY = bytes;
         }
     }
 

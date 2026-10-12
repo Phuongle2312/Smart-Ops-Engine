@@ -27,13 +27,13 @@ def build_state(cfg: Settings) -> dict:
     )
     kb = KnowledgeBase(cfg.knowledge_dir, retriever)
     kb.reload()
-    ollama = OllamaVision(cfg.ollama_url, cfg.vision_model, cfg.vision_timeout_s)
+    ollama = OllamaVision(cfg.ollama_url, cfg.vision_model, cfg.vision_timeout_s, cfg.ollama_num_gpu)
     ocr = build_ocr(cfg.ocr_enabled)
     pipeline = DiagnosisPipeline(cfg, ocr, ollama if cfg.vision_enabled else None, kb)
     llm = (
         OpenAIChat(cfg.llm_base_url, cfg.llm_api_key, cfg.llm_model, cfg.llm_timeout_s)
         if cfg.llm_provider == "openai"
-        else OllamaChat(cfg.ollama_url, cfg.llm_model, cfg.llm_timeout_s)
+        else OllamaChat(cfg.ollama_url, cfg.llm_model, cfg.llm_timeout_s, cfg.ollama_num_gpu)
     )
     agent = DiagnosisAgent(cfg, llm, pipeline, kb)
     return {"kb": kb, "ocr": ocr, "ollama": ollama, "pipeline": pipeline, "agent": agent}

@@ -36,6 +36,24 @@ class DiagnosisEmailTemplateTest {
     }
 
     @Test
+    void runbookMarkdownRenderedAsHtmlAndStillEscaped() {
+        String html = DiagnosisEmailTemplate.runbookHtml("""
+                ## Nguyên nhân
+                - Lỗi <b>driver</b>
+                - Hết VRAM
+
+                ```
+                nvidia-smi && dmesg
+                ```
+                """);
+
+        assertTrue(html.contains("<h4"));
+        assertTrue(html.contains("<li>Lỗi &lt;b&gt;driver&lt;/b&gt;</li>"));
+        assertTrue(html.contains("<pre>nvidia-smi &amp;&amp; dmesg"));
+        assertFalse(html.contains("##"));
+    }
+
+    @Test
     void needsReviewShowsConfirmationBanner() {
         assertTrue(DiagnosisEmailTemplate.build("n", result("needs_review", ""), "now", false).contains("Cần xác nhận"));
         assertFalse(DiagnosisEmailTemplate.build("n", result("needs_review", ""), "now", false).contains("cid:error-image"));

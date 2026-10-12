@@ -4,6 +4,7 @@ import com.soe.entity.IncidentLog;
 import com.soe.entity.Node;
 import com.soe.entity.SystemConfig;
 import com.soe.repository.IncidentLogRepository;
+import com.soe.repository.NodeMetricRepository;
 import com.soe.repository.NodeRepository;
 import com.soe.service.NodeMetricsService;
 import com.soe.service.NodeMetricsService.NodeMetricsSnapshot;
@@ -11,6 +12,7 @@ import com.soe.service.OutlookAlertService;
 import com.soe.service.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +29,10 @@ public class HealthCheckScheduler {
     private final OutlookAlertService outlookAlertService;
     private final NodeMetricsService nodeMetricsService;
     private final SystemConfigService systemConfigService;
+    private final NodeMetricRepository nodeMetricRepository;
+
+    @Value("${smartops.metrics.retention-days:30}")
+    private int metricsRetentionDays = 30;
 
     // LƯU Ý: @Scheduled đọc property này 1 LẦN lúc Spring khởi động (giới hạn của annotation-based
     // scheduling). Trường "Chu kỳ quét" trên trang Cấu hình hệ thống được lưu vào DB để tham khảo/dùng
@@ -49,13 +55,23 @@ public class HealthCheckScheduler {
     public void runDailyReport() {
         log.info("[SCHEDULER] Running daily morning health report...");
         List<Node> activeNodes = nodeRepository.findByActiveTrue();
-        long openIncidentsCount = incidentLogRepository.findAll().stream()
-                .filter(inc -> "OPEN".equalsIgnoreCase(inc.getStatus()))
-                .count();
+        long openIncidentsCount = incidentLogRepository.countByStatusIgnoreCase("OPEN");
         try {
             outlookAlertService.sendDailySummaryReport(activeNodes.size(), openIncidentsCount);
         } catch (Exception e) {
             log.error("[SCHEDULER] Failed to send daily summary report: {}", e.getMessage(), e);
+        }
+    }
+
+    // Dọn lịch sử metrics cũ hơn N ngày (mặc định 30) lúc 02:00 mỗi ngày
+    @Scheduled(cron = "${smartops.metrics.cleanup-cron:0 0 2 * * *}")
+    public void cleanupOldMetrics() {
+        try {
+            long deleted = nodeMetricRepository.deleteByRecordedAtBefore(
+                    LocalDateTime.now().minusDays(metricsRetentionDays));
+            log.info("[SCHEDULER] Đã xóa {} bản ghi metrics cũ hơn {} ngày", deleted, metricsRetentionDays);
+        } catch (Exception e) {
+            log.error("[SCHEDULER] Dọn metrics cũ thất bại: {}", e.getMessage(), e);
         }
     }
 
@@ -73,8 +89,9 @@ public class HealthCheckScheduler {
             if (snap.diskPercent() >= diskCritical) {
                 String issue = String.format("Disk usage CRITICAL: %d%% (ngưỡng: %d%%)", snap.diskPercent(), diskCritical);
                 String resolution = "Cần xem xét ngay: dọn log cũ, xóa temp files, hoặc mở rộng dung lượng.";
-                outlookAlertService.sendMetricsAlert(node.getName(), snap, "DISK_CRITICAL", issue, resolution);
-                saveIncidentLog(node, "DISK_CRITICAL", issue, resolution, "OPEN");
+                if (saveIncidentLog(node, "DISK_CRITICAL", issue, resolution, "OPEN")) { // chỉ gửi email khi là sự cố mới, tránh spam mỗi chu kỳ
+                    outlookAlertService.sendMetricsAlert(node.getName(), snap, "DISK_CRITICAL", issue, resolution);
+                }
 
             } else if (snap.diskPercent() >= diskWarning) {
                 String issue = String.format("Disk usage WARNING: %d%% (ngưỡng cảnh báo: %d%%)", snap.diskPercent(), diskWarning);
@@ -86,16 +103,18 @@ public class HealthCheckScheduler {
             if (snap.cpuPercent() >= 0 && snap.cpuPercent() >= cpuCritical) {
                 String issue = String.format("CPU usage CRITICAL: %d%% (ngưỡng: %d%%)", snap.cpuPercent(), cpuCritical);
                 String resolution = "Kiểm tra tiến trình đang chiếm CPU cao, cân nhắc restart service hoặc scale up.";
-                outlookAlertService.sendMetricsAlert(node.getName(), snap, "CPU_CRITICAL", issue, resolution);
-                saveIncidentLog(node, "CPU_CRITICAL", issue, resolution, "OPEN");
+                if (saveIncidentLog(node, "CPU_CRITICAL", issue, resolution, "OPEN")) { // chỉ gửi email khi là sự cố mới, tránh spam mỗi chu kỳ
+                    outlookAlertService.sendMetricsAlert(node.getName(), snap, "CPU_CRITICAL", issue, resolution);
+                }
             }
 
             // --- Memory ---
             if (snap.memoryPercent() >= 0 && snap.memoryPercent() >= memoryCritical) {
                 String issue = String.format("Memory usage CRITICAL: %d%% (ngưỡng: %d%%)", snap.memoryPercent(), memoryCritical);
                 String resolution = "Kiểm tra memory leak, restart service hoặc tăng RAM.";
-                outlookAlertService.sendMetricsAlert(node.getName(), snap, "MEMORY_CRITICAL", issue, resolution);
-                saveIncidentLog(node, "MEMORY_CRITICAL", issue, resolution, "OPEN");
+                if (saveIncidentLog(node, "MEMORY_CRITICAL", issue, resolution, "OPEN")) { // chỉ gửi email khi là sự cố mới, tránh spam mỗi chu kỳ
+                    outlookAlertService.sendMetricsAlert(node.getName(), snap, "MEMORY_CRITICAL", issue, resolution);
+                }
             }
 
         } catch (Exception e) {
@@ -103,13 +122,20 @@ public class HealthCheckScheduler {
 
             String issue = "Không thể thu thập metrics — Server có thể đã down hoặc unreachable";
             String resolution = "Kiểm tra network, firewall, và trạng thái server vật lý.";
-            outlookAlertService.sendMetricsAlert(node.getName(), null, "SSH_FAILURE", issue, resolution);
-            saveIncidentLog(node, "SSH_FAILURE", issue, resolution, "OPEN");
+            if (saveIncidentLog(node, "SSH_FAILURE", issue, resolution, "OPEN")) { // chỉ gửi email khi là sự cố mới, tránh spam mỗi chu kỳ
+                outlookAlertService.sendMetricsAlert(node.getName(), null, "SSH_FAILURE", issue, resolution);
+            }
         }
     }
 
-    private void saveIncidentLog(Node node, String type, String issue, String resolution, String status) {
+    /** @return true nếu cần gửi cảnh báo (sự cố mới); false nếu trùng sự cố đang mở. */
+    private boolean saveIncidentLog(Node node, String type, String issue, String resolution, String status) {
         try {
+            if (incidentLogRepository.existsByNodeIdAndIncidentTypeAndStatusIn(
+                    node.getId(), type, List.of("OPEN", "MONITORING"))) {
+                log.debug("[SCHEDULER] Bỏ qua incident trùng {} cho node '{}'", type, node.getName());
+                return false;
+            }
             IncidentLog record = IncidentLog.builder()
                     .node(node)
                     .incidentType(type)
@@ -119,8 +145,10 @@ public class HealthCheckScheduler {
                     .detectedAt(LocalDateTime.now())
                     .build();
             incidentLogRepository.save(record);
+            return true;
         } catch (Exception e) {
             log.error("[SCHEDULER] Failed to save incident log for node '{}': {}", node.getName(), e.getMessage(), e);
+            return true; // lỗi DB không được làm mất cảnh báo email
         }
     }
 }

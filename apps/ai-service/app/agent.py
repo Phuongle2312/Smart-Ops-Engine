@@ -8,6 +8,7 @@ Vòng lặp: [mục tiêu] → LLM chọn công cụ → chạy → kết quả 
 """
 import json
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 
 import httpx
@@ -57,6 +58,8 @@ TOOLS = [
            "recommended_steps": {"type": "array", "items": {"type": "string"}}},
           ["error_code", "confidence", "summary"]),
 ]
+
+_CJK = re.compile(r"[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]")  # Nhật/Hoa/Hàn
 
 
 @dataclass
@@ -211,6 +214,11 @@ class DiagnosisAgent:
             code, conf = "UNKNOWN", 0.0
             summary = "Không đủ bằng chứng để chẩn đoán."
         etype = get_type(code)  # mã ngoài taxonomy → UNKNOWN
+        if _CJK.search(summary) or any(_CJK.search(x) for x in steps):
+            # Mô hình nhỏ đôi khi trả tiếng Trung dù đã yêu cầu tiếng Việt: thay bằng mô tả chuẩn, chỉ dẫn xem runbook
+            warnings.append("LLM trả nội dung không phải tiếng Việt — đã thay bằng mô tả chuẩn của mã lỗi")
+            summary = f"{etype.code}: {etype.description}."
+            steps = ["Xem runbook của mã lỗi này để biết lệnh chẩn đoán và hướng xử lý chi tiết."] if etype.code != "UNKNOWN" else []
         if etype.code == "UNKNOWN":
             conf = min(conf, 0.5)
         return AgentResult(status, etype.code, etype.resource, etype.severity, round(conf, 2), summary,

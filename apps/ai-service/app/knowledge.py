@@ -149,6 +149,7 @@ class KnowledgeBase:
     def __init__(self, knowledge_dir: Path, retriever: Retriever) -> None:
         self._dir = knowledge_dir
         self._retriever = retriever
+        self._preferred = retriever  # giữ retriever vector gốc để thử lại khi reindex
         self._docs: list[Document] = []
         self._runbooks: dict[str, Document] = {}
 
@@ -164,6 +165,7 @@ class KnowledgeBase:
         """Nạp lại runbook; cố gắng index vào retriever (lỗi retriever không làm hỏng runbook)."""
         self._docs = [parse_markdown(p) for p in sorted(self._dir.glob("*.md"))] if self._dir.exists() else []
         self._runbooks = {d.code: d for d in self._docs if d.code}
+        self._retriever = self._preferred  # thử lại vector dù lần trước đã hạ xuống từ khóa
         try:
             return self._retriever.index(self._docs)
         except Exception as exc:

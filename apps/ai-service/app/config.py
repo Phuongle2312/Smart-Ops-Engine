@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     data_dir: Path = REPO_ROOT / "data"
 
     ollama_url: str = "http://localhost:11434"
+    # 0 = ép Ollama chạy CPU (máy dev có GPU không tương thích làm runner crash "CUDA error"); None = để Ollama tự chọn
+    ollama_num_gpu: int | None = None
     vision_model: str = "qwen2.5vl:7b"
     embed_model: str = "bge-m3"
     vision_enabled: bool = True

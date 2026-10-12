@@ -1,1 +1,70 @@
 file,nhan,tai_nguyen,nguon,giay_phep,ngay_them,nguoi_gan_nhan
+cpu\Htop_3.0.1_screenshot.png,,CPU\HTOP_3.0.1_SCREENSHOT.PNG,https://commons.wikimedia.org/wiki/File:Htop_3.0.1_screenshot.png,GPL,2026-10-05,
+cpu\Htop_Linux_screenshot.png,,CPU\HTOP_LINUX_SCREENSHOT.PNG,https://commons.wikimedia.org/wiki/File:Htop_Linux_screenshot.png,GPL,2026-10-05,
+cpu\Htop_on_a_48_core_computer.png,,CPU\HTOP_ON_A_48_CORE_COMPUTER.PNG,https://commons.wikimedia.org/wiki/File:Htop_on_a_48_core_computer.png,CC BY-SA 3.0,2026-10-05,
+cpu\Intel-Raptor-Lake-instability-error.png,,CPU\INTEL-RAPTOR-LAKE-INSTABILITY-ERROR.PNG,https://commons.wikimedia.org/wiki/File:Intel-Fehlermeldung_durch_Intel_Raptor_Lake-Instabilit%C3%A4tsprobleme.png,Public domain,2026-10-05,
+cpu\TaskManager-Intel-i9-9900K.png,,CPU\TASKMANAGER-INTEL-I9-9900K.PNG,https://commons.wikimedia.org/wiki/File:2024-04-01_17_37_41-Auslastung_Intel_Core_i9-9900K.png,Public domain,2026-10-05,
+gpu\Blue_screen_of_death_on_a_Dell_laptop.jpg,,GPU\BLUE_SCREEN_OF_DEATH_ON_A_DELL_LAPTOP.JPG,https://commons.wikimedia.org/wiki/File:Blue_screen_of_death_on_a_Dell_laptop.jpg,CC BY 4.0,2026-10-05,
+gpu\Blue_screen_of_death_xp_ati.JPG,,GPU\BLUE_SCREEN_OF_DEATH_XP_ATI.JPG,https://commons.wikimedia.org/wiki/File:Blue_screen_of_death_xp_ati.JPG,CC BY-SA 4.0,2026-10-05,
+gpu\FreeBSD_kernel_panic.png,,GPU\FREEBSD_KERNEL_PANIC.PNG,https://commons.wikimedia.org/wiki/File:FreeBSD_kernel_panic.png,Public domain,2026-10-05,
+gpu\Windows_9X_BSOD.png,,GPU\WINDOWS_9X_BSOD.PNG,https://commons.wikimedia.org/wiki/File:Windows_9X_BSOD.png,Public domain,2026-10-05,
+ram\Arch_Linux_kernel_panic.png,,RAM\ARCH_LINUX_KERNEL_PANIC.PNG,https://commons.wikimedia.org/wiki/File:Arch_Linux_kernel_panic.png,GPL,2026-10-05,
+ram\Linux_5.7_kernel_panic.png,,RAM\LINUX_5.7_KERNEL_PANIC.PNG,https://commons.wikimedia.org/wiki/File:Linux_5.7_kernel_panic.png,GPL,2026-10-05,
+ram\Memtest86_-6.00b2.png,,RAM\MEMTEST86_-6.00B2.PNG,https://commons.wikimedia.org/wiki/File:Memtest86%2B-6.00b2.png,Public domain,2026-10-05,
+ram\Memtest86__Screenshot.png,,RAM\MEMTEST86__SCREENSHOT.PNG,https://commons.wikimedia.org/wiki/File:Memtest86%2B_Screenshot.png,GPL,2026-10-05,
+ram\Memtest86_v83p.png,,RAM\MEMTEST86_V83P.PNG,https://commons.wikimedia.org/wiki/File:Memtest86_v83p.png,Public domain,2026-10-05,
+simulated/ram/ram_oom_killer/ubuntu-screenshot.png,RAM_OOM_KILLER,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_oom_killer/ubuntu-photo.jpg,RAM_OOM_KILLER,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_oom_killer/dark-screenshot.png,RAM_OOM_KILLER,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_oom_killer/dark-photo.jpg,RAM_OOM_KILLER,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_oom_killer/solar-screenshot.png,RAM_OOM_KILLER,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_java_heap/ubuntu-screenshot.png,RAM_JAVA_HEAP,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_java_heap/ubuntu-photo.jpg,RAM_JAVA_HEAP,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_java_heap/dark-screenshot.png,RAM_JAVA_HEAP,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_java_heap/dark-photo.jpg,RAM_JAVA_HEAP,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_java_heap/solar-screenshot.png,RAM_JAVA_HEAP,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_swap_high/ubuntu-screenshot.png,RAM_SWAP_HIGH,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_swap_high/ubuntu-photo.jpg,RAM_SWAP_HIGH,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_swap_high/dark-screenshot.png,RAM_SWAP_HIGH,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_swap_high/dark-photo.jpg,RAM_SWAP_HIGH,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_swap_high/solar-screenshot.png,RAM_SWAP_HIGH,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_leak/ubuntu-screenshot.png,RAM_LEAK,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_leak/ubuntu-photo.jpg,RAM_LEAK,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_leak/dark-screenshot.png,RAM_LEAK,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_leak/dark-photo.jpg,RAM_LEAK,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/ram/ram_leak/solar-screenshot.png,RAM_LEAK,RAM,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_high_sustained/ubuntu-screenshot.png,CPU_HIGH_SUSTAINED,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_high_sustained/ubuntu-photo.jpg,CPU_HIGH_SUSTAINED,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_high_sustained/dark-screenshot.png,CPU_HIGH_SUSTAINED,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_high_sustained/dark-photo.jpg,CPU_HIGH_SUSTAINED,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_high_sustained/solar-screenshot.png,CPU_HIGH_SUSTAINED,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_load_avg_high/ubuntu-screenshot.png,CPU_LOAD_AVG_HIGH,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_load_avg_high/ubuntu-photo.jpg,CPU_LOAD_AVG_HIGH,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_load_avg_high/dark-screenshot.png,CPU_LOAD_AVG_HIGH,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_load_avg_high/dark-photo.jpg,CPU_LOAD_AVG_HIGH,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_load_avg_high/solar-screenshot.png,CPU_LOAD_AVG_HIGH,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_thermal_throttle/ubuntu-screenshot.png,CPU_THERMAL_THROTTLE,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_thermal_throttle/ubuntu-photo.jpg,CPU_THERMAL_THROTTLE,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_thermal_throttle/dark-screenshot.png,CPU_THERMAL_THROTTLE,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_thermal_throttle/dark-photo.jpg,CPU_THERMAL_THROTTLE,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/cpu/cpu_thermal_throttle/solar-screenshot.png,CPU_THERMAL_THROTTLE,CPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_cuda_oom/ubuntu-screenshot.png,GPU_CUDA_OOM,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_cuda_oom/ubuntu-photo.jpg,GPU_CUDA_OOM,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_cuda_oom/dark-screenshot.png,GPU_CUDA_OOM,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_cuda_oom/dark-photo.jpg,GPU_CUDA_OOM,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_cuda_oom/solar-screenshot.png,GPU_CUDA_OOM,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_overheat/ubuntu-screenshot.png,GPU_OVERHEAT,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_overheat/ubuntu-photo.jpg,GPU_OVERHEAT,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_overheat/dark-screenshot.png,GPU_OVERHEAT,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_overheat/dark-photo.jpg,GPU_OVERHEAT,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_overheat/solar-screenshot.png,GPU_OVERHEAT,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_xid_error/ubuntu-screenshot.png,GPU_XID_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_xid_error/ubuntu-photo.jpg,GPU_XID_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_xid_error/dark-screenshot.png,GPU_XID_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_xid_error/dark-photo.jpg,GPU_XID_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_xid_error/solar-screenshot.png,GPU_XID_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_ecc_error/ubuntu-screenshot.png,GPU_ECC_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_ecc_error/ubuntu-photo.jpg,GPU_ECC_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_ecc_error/dark-screenshot.png,GPU_ECC_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_ecc_error/dark-photo.jpg,GPU_ECC_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script
+simulated/gpu/gpu_ecc_error/solar-screenshot.png,GPU_ECC_ERROR,GPU,mô phỏng bằng scripts/make_realistic_samples.py,CC0 (tự sinh),2026-10-05,script

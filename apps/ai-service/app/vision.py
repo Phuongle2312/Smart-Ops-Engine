@@ -67,17 +67,18 @@ def parse_vision_json(content: str) -> VisionResult:
 
 
 class OllamaVision:
-    def __init__(self, base_url: str, model: str, timeout_s: float) -> None:
+    def __init__(self, base_url: str, model: str, timeout_s: float, num_gpu: int | None = None) -> None:
         self._url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout_s
+        self._options = {"temperature": 0, **({"num_gpu": num_gpu} if num_gpu is not None else {})}
 
     def classify(self, png_bytes: bytes, ocr_text: str = "", note: str = "") -> VisionResult:
         payload = {
             "model": self._model,
             "stream": False,
             "format": "json",
-            "options": {"temperature": 0},
+            "options": self._options,
             "messages": [
                 {
                     "role": "user",

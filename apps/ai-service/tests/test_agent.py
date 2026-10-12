@@ -139,3 +139,52 @@ def test_llm_http_error_becomes_llmerror(monkeypatch):
     except llm_mod.LLMError:
         return
     raise AssertionError("phải ném LLMError")
+
+
+def test_ollama_falls_back_to_prompt_emulation_when_model_has_no_tools(monkeypatch):
+    calls = []
+
+    def fake_post(url, json, headers, timeout):
+        calls.append(json)
+        req = httpx.Request("POST", url)
+        if "tools" in json:
+            return httpx.Response(400, json={"error": "qwen2.5vl:3b does not support tools"}, request=req)
+        return httpx.Response(
+            200, json={"message": {"content": 'Được: {"tool": "get_runbook", "args": {"code": "RAM_LEAK"}}'}}, request=req)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    tools = [{"type": "function", "function": {"name": "get_runbook", "description": "d", "parameters": {}}}]
+    llm = OllamaChat("http://o", "qwen2.5vl:3b", 5)
+    msgs = [{"role": "system", "content": "S"}, {"role": "user", "content": "x"},
+            {"role": "assistant", "content": "", "tool_calls": [{"id": "1", "name": "search_runbook", "args": {"q": "a"}}]},
+            {"role": "tool", "tool_call_id": "1", "name": "search_runbook", "content": "kq"}]
+    reply = llm.chat(msgs, tools)
+    assert reply.tool_calls[0].name == "get_runbook" and reply.tool_calls[0].args == {"code": "RAM_LEAK"}
+    sent = calls[-1]
+    assert "tools" not in sent and sent["format"] == "json" and "get_runbook" in sent["messages"][0]["content"]
+    assert sent["messages"][-1] == {"role": "user", "content": "Kết quả công cụ search_runbook:\nkq"}
+    llm.chat(msgs, tools)  # lần sau đi thẳng đường giả lập, không thử lại tools gốc
+    assert "tools" not in calls[-1] and len(calls) == 3
+
+
+def test_ollama_emulation_plain_text_reply_has_no_tool_calls(monkeypatch):
+    def fake_post(url, json, headers, timeout):
+        req = httpx.Request("POST", url)
+        if "tools" in json:
+            return httpx.Response(400, json={"error": "does not support tools"}, request=req)
+        return httpx.Response(200, json={"message": {"content": "không rõ"}}, request=req)
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    reply = OllamaChat("http://o", "m", 5).chat([{"role": "user", "content": "x"}], [])
+    assert reply.tool_calls == [] and reply.content == "không rõ"
+
+
+def test_agent_replaces_non_vietnamese_conclusion_with_standard_description(cfg, kb):
+    agent, _ = make_agent(cfg, kb, [
+        call("finish", error_code="RAM_JAVA_HEAP", confidence=0.9, summary="堆内存不足", recommended_steps=["增加内存"]),
+    ])
+    r = agent.run(None, "1", "Java treo")
+    assert r.error_code == "RAM_JAVA_HEAP"
+    assert "堆" not in r.summary and r.summary.startswith("RAM_JAVA_HEAP:")
+    assert r.recommended_steps and "runbook" in r.recommended_steps[0]
+    assert any("tiếng Việt" in w for w in r.warnings)

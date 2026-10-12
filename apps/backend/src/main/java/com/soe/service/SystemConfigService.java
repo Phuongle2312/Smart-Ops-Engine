@@ -121,6 +121,9 @@ public class SystemConfigService {
         requireRange(config.getDiskCriticalThreshold(), "Ngưỡng disk critical");
         requireRange(config.getCpuCriticalThreshold(), "Ngưỡng CPU critical");
         requireRange(config.getMemoryCriticalThreshold(), "Ngưỡng memory critical");
+        if (config.getDiskWarningThreshold() >= config.getDiskCriticalThreshold()) {
+            throw new IllegalArgumentException("Ngưỡng disk warning phải nhỏ hơn ngưỡng disk critical.");
+        }
         if (config.getSchedulerIntervalMs() == null || config.getSchedulerIntervalMs() < 10_000) {
             throw new IllegalArgumentException("Chu kỳ quét phải tối thiểu 10.000ms (10 giây).");
         }

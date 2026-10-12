@@ -77,7 +77,8 @@ Cần biết:
 
 - **AES dùng ECB mode** (không IV) — không an toàn cho production; nên nâng lên AES/GCM.
 - **Nguy cơ double-encrypt:** không gọi `AesEncryptionUtil.encrypt()` thủ công trong `NodeController` vì `CryptoConverter` đã tự encrypt khi persist. Kiểm tra kỹ luồng lưu Node.
-- Secret key AES, mật khẩu DB và SMTP của v1 đọc từ **biến môi trường** (xem `apps/backend/.env.example`) — không commit giá trị thật.
+- Secret key AES, mật khẩu DB và SMTP của v1 đọc từ **biến môi trường** (xem `apps/backend/.env.example`) — không commit giá trị thật. `AES_SECRET_KEY` **không có mặc định** (16/24/32 byte): thiếu thì backend không khởi động; chỉ profile `dev` có khóa mặc định để chạy thử.
+- Xóa node xóa luôn người phụ trách, sự cố và metrics của node đó; tạo node thiếu host/username → 400, trùng host → 409.
 - Nhiều tính năng (Auth/JWT, WebSocket thật, Audit log, Metrics history) mới là **kế hoạch v2.0** — frontend đang mock, backend bổ sung dần (metrics-history: đã có API + job dọn `smartops.metrics.retention-days`; chống trùng incident đã làm trong `HealthCheckScheduler`).
 
 ## Tài liệu tham chiếu

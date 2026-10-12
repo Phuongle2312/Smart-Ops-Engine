@@ -4,6 +4,7 @@ import com.soe.entity.IncidentLog;
 import com.soe.entity.Node;
 import com.soe.entity.SystemConfig;
 import com.soe.repository.IncidentLogRepository;
+import com.soe.repository.NodeMetricRepository;
 import com.soe.repository.NodeRepository;
 import com.soe.service.NodeMetricsService;
 import com.soe.service.NodeMetricsService.NodeMetricsSnapshot;
@@ -44,6 +45,9 @@ class HealthCheckSchedulerTest {
     @Mock
     private SystemConfigService systemConfigService;
 
+    @Mock
+    private NodeMetricRepository nodeMetricRepository;
+
     @InjectMocks
     private HealthCheckScheduler healthCheckScheduler;
 
@@ -64,7 +68,7 @@ class HealthCheckSchedulerTest {
         config.setCpuCriticalThreshold(85);
         config.setMemoryCriticalThreshold(90);
 
-        when(nodeRepository.findByActiveTrue()).thenReturn(List.of(node));
+        lenient().when(nodeRepository.findByActiveTrue()).thenReturn(List.of(node));
         lenient().when(systemConfigService.getCurrentConfig()).thenReturn(config);
     }
 
@@ -131,6 +135,27 @@ class HealthCheckSchedulerTest {
 
         verify(outlookAlertService).sendMetricsAlert(eq("test-server.local"), isNull(), eq("SSH_FAILURE"), anyString(), anyString());
         assertEquals("SSH_FAILURE", captureSingleIncident().getIncidentType());
+    }
+
+    @Test
+    void suCoTrungDangMo_khongGhiLaiVaKhongGuiEmailLanNua() throws Exception {
+        when(nodeMetricsService.collectAndSave(node)).thenThrow(new RuntimeException("SSH timeout"));
+        when(incidentLogRepository.existsByNodeIdAndIncidentTypeAndStatusIn(any(), eq("SSH_FAILURE"), any()))
+                .thenReturn(true);
+
+        healthCheckScheduler.runDiskHealthCheck();
+
+        verify(incidentLogRepository, never()).save(any());
+        verify(outlookAlertService, never()).sendMetricsAlert(anyString(), any(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void donMetricsCu_xoaTheoMocRetention() {
+        when(nodeMetricRepository.deleteByRecordedAtBefore(any())).thenReturn(5L);
+
+        healthCheckScheduler.cleanupOldMetrics();
+
+        verify(nodeMetricRepository).deleteByRecordedAtBefore(any());
     }
 
     private IncidentLog captureSingleIncident() {

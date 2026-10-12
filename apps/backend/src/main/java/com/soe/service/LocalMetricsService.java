@@ -29,6 +29,9 @@ import java.util.List;
 @Slf4j
 @Service
 public class LocalMetricsService {
+
+    private static final long CPU_SAMPLE_MS = 500;
+    private volatile boolean cpuPrimed;
  
     // =========================================================================
     // CPU
@@ -49,6 +52,12 @@ public class LocalMetricsService {
  
             // Cast sang com.sun.management để lấy getSystemCpuLoad()
             if (osBean instanceof com.sun.management.OperatingSystemMXBean sunBean) {
+                if (!cpuPrimed) {
+                    // Lần đọc đầu của JVM luôn ra 0 vì chưa có mẫu trước đó — đọc mồi, chờ rồi đọc lại
+                    cpuPrimed = true;
+                    sunBean.getCpuLoad();
+                    Thread.sleep(CPU_SAMPLE_MS);
+                }
                 double load = sunBean.getCpuLoad();
                 if (load < 0) {
                     log.debug("[LOCAL] CPU load not available yet (JVM warming up)");
@@ -64,6 +73,9 @@ public class LocalMetricsService {
             int cores = osBean.getAvailableProcessors();
             return avgLoad > 0 ? Math.min((avgLoad / cores) * 100.0, 100.0) : -1.0;
  
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return -1.0;
         } catch (Exception e) {
             log.warn("[LOCAL] Cannot read CPU usage: {}", e.getMessage());
             return -1.0;

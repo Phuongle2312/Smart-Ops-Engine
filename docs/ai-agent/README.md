@@ -105,7 +105,7 @@ Biến môi trường (xem [.env.example](../../apps/ai-service/.env.example)):
 
 | Mục tiêu | Cấu hình |
 |---|---|
-| Nội bộ (Ollama) | `AI_LLM_PROVIDER=ollama`, `AI_LLM_MODEL=qwen2.5:7b` (chạy `ollama pull qwen2.5:7b`) |
+| Nội bộ (Ollama) | `AI_LLM_PROVIDER=ollama`, `AI_LLM_MODEL=qwen2.5:7b` (chạy `ollama pull qwen2.5:7b`). Mô hình **không hỗ trợ tools** (vd `qwen2.5vl:3b` đang dùng ở máy dev) vẫn chạy được: `OllamaChat` tự chuyển sang giả lập tool-calling bằng prompt + JSON — chậm và kém tin cậy hơn tool-calling gốc |
 | ChatGPT (OpenAI) | `AI_LLM_PROVIDER=openai`, `AI_LLM_BASE_URL=https://api.openai.com/v1`, `AI_LLM_MODEL=<model>`, `AI_LLM_API_KEY=<khóa>` |
 | Gemini | `AI_LLM_PROVIDER=openai`, `AI_LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai`, `AI_LLM_MODEL=<model Gemini>`, `AI_LLM_API_KEY=<khóa>` |
 

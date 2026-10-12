@@ -10,11 +10,12 @@ import com.soe.scheduler.HealthCheckScheduler;
 import com.soe.service.NodeMetricsService;
 import com.soe.service.NodeMetricsService.NodeMetricsSnapshot;
 import com.soe.service.OutlookAlertService;
-import jakarta.validation.Valid;
+import com.soe.service.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -37,6 +38,7 @@ public class NodeController {
     private final HealthCheckScheduler healthCheckScheduler;
     private final OutlookAlertService outlookAlertService;
     private final com.soe.repository.NodeOwnerRepository nodeOwnerRepository;
+    private final SystemConfigService systemConfigService;
 
     // --- NODE CRUD ---
 
@@ -49,12 +51,20 @@ public class NodeController {
     }
 
     @PostMapping("/nodes")
-    public ResponseEntity<NodeResponse> addNode(@Valid @RequestBody NodeRequest request) {
+    public ResponseEntity<?> addNode(@RequestBody NodeRequest request) {
+        String invalid = validateNewNode(request);
+        if (invalid != null) {
+            return ResponseEntity.badRequest().body(Map.of("error", invalid));
+        }
+        if (nodeRepository.findByHost(request.host().trim()).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(Map.of("error", "Host '" + request.host().trim() + "' đã được đăng ký cho node khác"));
+        }
         Node node = Node.builder()
-                .name(request.name())
-                .host(request.host())
+                .name(request.name().trim())
+                .host(request.host().trim())
                 .port(request.port() != null ? request.port() : 22)
-                .username(request.username())
+                .username(request.username().trim())
                 .password(request.password()) // CryptoConverter tự mã hóa khi persist — không encrypt thủ công (tránh double-encrypt)
                 .description(request.description())
                 .active(true)
@@ -74,17 +84,30 @@ public class NodeController {
     }
 
     @PutMapping("/nodes/{id}")
-    public ResponseEntity<NodeResponse> updateNode(@PathVariable Long id, @RequestBody NodeRequest request) {
+    public ResponseEntity<?> updateNode(@PathVariable Long id, @RequestBody NodeRequest request) {
+        if (request.port() != null && !validPort(request.port())) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Port phải trong khoảng 1-65535"));
+        }
+        if (request.host() != null) {
+            if (request.host().isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Host không được để trống"));
+            }
+            var other = nodeRepository.findByHost(request.host().trim());
+            if (other.isPresent() && !other.get().getId().equals(id)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(Map.of("error", "Host '" + request.host().trim() + "' đã được đăng ký cho node khác"));
+            }
+        }
         return nodeRepository.findById(id)
                 .map(node -> {
-                    if (request.name() != null) node.setName(request.name());
-                    if (request.host() != null) node.setHost(request.host());
+                    if (request.name() != null && !request.name().isBlank()) node.setName(request.name().trim());
+                    if (request.host() != null) node.setHost(request.host().trim());
                     if (request.port() != null) node.setPort(request.port());
                     if (request.username() != null) node.setUsername(request.username());
                     if (request.description() != null) node.setDescription(request.description());
                     // Chỉ đổi mật khẩu khi client gửi giá trị mới
                     if (request.password() != null && !request.password().isBlank()) node.setPassword(request.password());
-                    return ResponseEntity.ok(toResponse(nodeRepository.save(node)));
+                    return ResponseEntity.ok((Object) toResponse(nodeRepository.save(node)));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -106,11 +129,14 @@ public class NodeController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @Transactional
     @DeleteMapping("/nodes/{id}")
     public ResponseEntity<Void> deleteNode(@PathVariable Long id) {
         if (nodeRepository.existsById(id)) {
-            // Người phụ trách tham chiếu node qua FK — xóa trước để không vướng ràng buộc
-            nodeOwnerRepository.deleteAll(nodeOwnerRepository.findByNodeIdOrderByEscalationOrderAsc(id));
+            // Người phụ trách, sự cố và lịch sử metrics tham chiếu node qua FK — xóa trước để không vướng ràng buộc
+            nodeOwnerRepository.deleteByNodeId(id);
+            incidentLogRepository.deleteByNodeId(id);
+            nodeMetricRepository.deleteByNodeId(id);
             nodeRepository.deleteById(id);
             log.info("[API] Đã xóa Node ID: {}", id);
             return ResponseEntity.noContent().build();
@@ -210,6 +236,7 @@ public class NodeController {
     public ResponseEntity<Map<String, String>> testEmail() {
         log.info("[API] Gửi email thử nghiệm...");
         try {
+            String recipient = systemConfigService.getCurrentConfig().getAlertRecipientEmail();
             outlookAlertService.sendIncidentReport(
                     "TEST-NODE",
                     "TEST_ALERT: Kiểm tra hệ thống email",
@@ -217,7 +244,7 @@ public class NodeController {
             );
             return ResponseEntity.ok(Map.of(
                     "status", "SENT",
-                    "message", "Email đã được gửi thành công tới " + "letriphuong23.12@gmail.com"
+                    "message", "Email đã được gửi thành công tới " + recipient
             ));
         } catch (Exception e) {
             log.error("[API] Gửi email thất bại: {}", e.getMessage(), e);
@@ -226,6 +253,19 @@ public class NodeController {
                     "message", e.getMessage()
             ));
         }
+    }
+
+    private static boolean validPort(int port) {
+        return port >= 1 && port <= 65535;
+    }
+
+    /** @return thông báo lỗi, hoặc null nếu hợp lệ. */
+    private static String validateNewNode(NodeRequest r) {
+        if (r.name() == null || r.name().isBlank()) return "Tên node không được để trống";
+        if (r.host() == null || r.host().isBlank()) return "Host không được để trống";
+        if (r.username() == null || r.username().isBlank()) return "Username không được để trống";
+        if (r.port() != null && !validPort(r.port())) return "Port phải trong khoảng 1-65535";
+        return null;
     }
 
     // --- DTOs (Records) ---

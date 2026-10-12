@@ -73,7 +73,7 @@ public final class DiagnosisEmailTemplate {
             sb.append("<h4 style='color:#555'>Hướng xử lý: ").append(esc(r.runbook().title())).append("</h4>")
                     .append("<p style='font-size:13px;color:#777'>Gợi ý để người phụ trách tự thực hiện tại máy — "
                             + "hệ thống không tự chạy lệnh.</p>")
-                    .append("<pre>").append(esc(r.runbook().content())).append("</pre>");
+                    .append(runbookHtml(r.runbook().content()));
         }
         if (r.warnings() != null && !r.warnings().isEmpty()) {
             sb.append("<h4 style='color:#555'>Lưu ý hệ thống</h4><ul>").append(listItems(r.warnings())).append("</ul>");
@@ -100,6 +100,42 @@ public final class DiagnosisEmailTemplate {
         StringBuilder sb = new StringBuilder();
         for (String i : items) sb.append("<li>").append(esc(i)).append("</li>");
         return sb.toString();
+    }
+
+    /** Runbook markdown đơn giản (## tiêu đề, - gạch đầu dòng, ``` code) → HTML; mọi văn bản vẫn được escape. */
+    static String runbookHtml(String md) {
+        if (md == null || md.isBlank()) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder();
+        boolean inList = false;
+        boolean inCode = false;
+        for (String raw : md.split("\\R")) {
+            String line = raw.stripTrailing();
+            if (line.startsWith("```")) {
+                if (inList) { out.append("</ul>"); inList = false; }
+                out.append(inCode ? "</pre>" : "<pre>");
+                inCode = !inCode;
+                continue;
+            }
+            if (inCode) {
+                out.append(esc(line)).append('\n');
+                continue;
+            }
+            boolean item = line.startsWith("- ") || line.startsWith("* ");
+            if (inList && !item) { out.append("</ul>"); inList = false; }
+            if (line.startsWith("#")) {
+                out.append("<h4 style='color:#333;margin:14px 0 4px'>").append(esc(line.replaceFirst("^#+\\s*", ""))).append("</h4>");
+            } else if (item) {
+                if (!inList) { out.append("<ul style='margin:4px 0'>"); inList = true; }
+                out.append("<li>").append(esc(line.substring(2))).append("</li>");
+            } else if (!line.isBlank()) {
+                out.append("<p style='margin:4px 0'>").append(esc(line)).append("</p>");
+            }
+        }
+        if (inList) out.append("</ul>");
+        if (inCode) out.append("</pre>");
+        return out.toString();
     }
 
     private static String esc(String s) {

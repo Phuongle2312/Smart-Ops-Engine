@@ -28,12 +28,14 @@ PATTERNS: dict[str, list[tuple[str, float, str]]] = {
     ],
     "CPU_HIGH_SUSTAINED": [
         (r"cpu[^\n]{0,30}(9[5-9]|100)(\.\d+)?\s*%", 0.7, "CPU >= 95%"),
-        (r"(9[5-9]|100)(\.\d+)?\s*%\s*(cpu|us\b|user)", 0.7, "usage >= 95%"),
+        # OCR có thể làm mất dấu % (vd "99.6 us" trong dòng %Cpu(s) của top)
+        (r"(9[5-9]|100)(\.\d+)?\s*(%\s*)?(cpu|us\b|user)", 0.7, "usage >= 95%"),
+        (r"%cpu\(s\):\s*(9[5-9]|100)", 0.5, "%Cpu(s) >= 95"),
         (r"cpu usage", 0.2, "cpu usage"),
     ],
     "CPU_LOAD_AVG_HIGH": [
-        (r"load average:\s*\d{2,}\.\d+", 0.6, "load average >= 10"),
-        (r"load average", 0.3, "load average"),
+        (r"load\s*average:\s*\d{2,}\.\d+", 0.6, "load average >= 10"),
+        (r"load\s*average", 0.3, "load average"),
     ],
     "CPU_THERMAL_THROTTLE": [
         (r"thermal throttl", 0.9, "thermal throttling"),
@@ -46,8 +48,10 @@ PATTERNS: dict[str, list[tuple[str, float, str]]] = {
         (r"cudaerrormemoryallocation", 0.9, "cudaErrorMemoryAllocation"),
     ],
     "GPU_OVERHEAT": [
-        (r"(hw|sw)\s*thermal slowdown", 0.9, "thermal slowdown"),
+        (r"(hw|sw)\s*thermal\s*slowdown", 0.9, "thermal slowdown"),
         (r"gpu[^\n]{0,30}(8[5-9]|9\d)\s*c\b", 0.6, "GPU >= 85C"),
+        # OCR hay tách nhãn và giá trị ra hai dòng ("GPU Current Temp" / "91C")
+        (r"current temp\W{0,4}(8[5-9]|9\d)\s*c", 0.6, "Current Temp >= 85C"),
         (r"gpu temp", 0.25, "gpu temp"),
     ],
     "GPU_XID_ERROR": [
@@ -65,6 +69,22 @@ _COMPILED = {
     code: [(re.compile(rx, re.IGNORECASE), w, label) for rx, w, label in pats]
     for code, pats in PATTERNS.items()
 }
+
+
+_SIZE = re.compile(r"(\d+(?:\.\d+)?)\s*(ki|mi|gi|ti|k|m|g|t)b?", re.IGNORECASE)
+_UNIT = {"k": 1, "m": 1024, "g": 1024**2, "t": 1024**3}
+
+
+def _swap_nearly_full(text: str) -> bool:
+    """`free -h`: sau "Swap:" là tổng rồi đã dùng; true nếu đã dùng ≥ 90% tổng.
+
+    Chỉ xét hai giá trị đầu — cột thứ ba (free) gần bằng tổng nghĩa là swap còn trống, không phải đầy.
+    """
+    m = re.search(r"swap:", text, re.IGNORECASE)
+    if not m:
+        return False
+    sizes = [float(n) * _UNIT[u[0].lower()] for n, u in _SIZE.findall(text[m.end():m.end() + 80])[:2]]
+    return len(sizes) == 2 and sizes[0] * 0.9 <= sizes[1] <= sizes[0]
 
 
 @dataclass
@@ -85,6 +105,9 @@ def classify_text(text: str) -> RuleMatch | None:
             if rx.search(text):
                 score += weight
                 evidence.append(f"Khớp mẫu: {label}")
+        if code == "RAM_SWAP_HIGH" and _swap_nearly_full(text):
+            score += 0.7
+            evidence.append("Khớp mẫu: Swap đã dùng >= 90% (free -h)")
         if score > 0 and (best is None or score > best.confidence):
             best = RuleMatch(code, min(1.0, round(score, 2)), evidence)
     return best
